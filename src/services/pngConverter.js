@@ -62,8 +62,6 @@ async function generateConvertedPngById(routeId) {
 /**
  * Create a visible PNG with route information (using HTML5 Canvas simulation)
  */
-const sharp = require('sharp');
-
 async function createVisiblePng(routeData) {
   try {
     logger.info('Creating visible PNG with permit template...');
