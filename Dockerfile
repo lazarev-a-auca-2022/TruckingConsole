@@ -7,12 +7,23 @@ WORKDIR /app
 COPY package*.json ./
 
 
-# Install dependencies (including sharp and canvas for PNG generation)
-RUN apk add --no-cache --virtual .gyp python3 make g++ \
-    && apk add --no-cache pkgconfig pixman-dev cairo-dev pango-dev jpeg-dev giflib-dev \
-    && npm install --only=production \
-    && npm install sharp canvas \
-    && apk del .gyp
+# Install system dependencies for canvas and sharp
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    pkgconfig \
+    pixman-dev \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev
+
+# Install Node.js dependencies
+RUN npm install --only=production
+
+# Install sharp and canvas with increased timeout and memory
+RUN npm install --verbose --timeout=300000 sharp
 
 # Copy source code
 COPY src/ ./src/
