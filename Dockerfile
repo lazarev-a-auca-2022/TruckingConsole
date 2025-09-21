@@ -6,8 +6,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --only=production
+
+# Install dependencies (including sharp for SVG to PNG conversion)
+RUN npm install --only=production && npm install sharp
 
 # Copy source code
 COPY src/ ./src/

@@ -61,47 +61,18 @@ async function generateConvertedPngById(routeId) {
 /**
  * Create a visible PNG with route information (using HTML5 Canvas simulation)
  */
+const sharp = require('sharp');
+
 async function createVisiblePng(routeData) {
   try {
     logger.info('Creating visible PNG with route information...');
-    
-    const routeId = routeData.routeId || 'unknown';
-    const state = routeData.state || 'XX';
-    
-    // Use larger, more visible PNG patterns
-    let pngBuffer;
-    
-    switch (state) {
-      case 'IL':
-        // Blue pattern for Illinois - create a simple blue rectangle
-        pngBuffer = createSimpleColorPng(100, 100, [0, 0, 255]); // Blue
-        break;
-      case 'WI':
-        // Green pattern for Wisconsin
-        pngBuffer = createSimpleColorPng(100, 100, [0, 255, 0]); // Green
-        break;
-      case 'MO':
-        // Red pattern for Missouri
-        pngBuffer = createSimpleColorPng(100, 100, [255, 0, 0]); // Red
-        break;
-      case 'ND':
-        // Yellow pattern for North Dakota
-        pngBuffer = createSimpleColorPng(100, 100, [255, 255, 0]); // Yellow
-        break;
-      case 'IN':
-        // Purple pattern for Indiana
-        pngBuffer = createSimpleColorPng(100, 100, [128, 0, 128]); // Purple
-        break;
-      default:
-        // Gray pattern for unknown
-        pngBuffer = createSimpleColorPng(100, 100, [128, 128, 128]); // Gray
-    }
-    
-    logger.info(`Created ${state} colored PNG: ${pngBuffer.length} bytes`);
-    logger.info(`Route ID: ${routeId}`);
-    
+    const width = 800;
+    const height = 600;
+    const svg = createPermitSvg(routeData, width, height);
+    // Convert SVG to PNG using sharp
+    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    logger.info(`Created visible PNG from SVG: ${pngBuffer.length} bytes`);
     return pngBuffer;
-    
   } catch (error) {
     logger.error(`Failed to create visible PNG: ${error.message}`);
     logger.error(`Error stack: ${error.stack}`);
