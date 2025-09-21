@@ -1,0 +1,43 @@
+{
+  "name": "trucking-console-app",
+  "version": "1.0.0",
+  "description": "Console-only truck permit parsing application",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest",
+    "docker:build": "docker build -t trucking-console .",
+    "docker:run": "docker run -p 3000:3000 trucking-console"
+  },
+  "keywords": [
+    "trucking",
+    "permits",
+    "pdf",
+    "parsing",
+    "console"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "pdf2json": "^3.0.4",
+    "tesseract.js": "^5.0.2",
+    "sharp": "^0.32.6",
+    "commander": "^11.0.0",
+    "fs-extra": "^11.1.1",
+    "path": "^0.12.7",
+    "axios": "^1.5.0",
+    "gpx-builder": "^3.0.0",
+    "mongodb": "^6.0.0",
+    "mongoose": "^7.5.0",
+    "winston": "^3.10.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "jest": "^29.6.4",
+    "supertest": "^6.3.3"
+  }
+}
