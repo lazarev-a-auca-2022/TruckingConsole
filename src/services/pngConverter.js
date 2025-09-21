@@ -62,16 +62,49 @@ async function generateConvertedPngById(routeId) {
  * Create a visible PNG with route information (using HTML5 Canvas simulation)
  */
 const sharp = require('sharp');
+const { createCanvas, loadImage } = require('canvas');
 
 async function createVisiblePng(routeData) {
   try {
-    logger.info('Creating visible PNG with route information...');
-    const width = 800;
-    const height = 600;
-    const svg = createPermitSvg(routeData, width, height);
-    // Convert SVG to PNG using sharp
-    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
-    logger.info(`Created visible PNG from SVG: ${pngBuffer.length} bytes`);
+    logger.info('Creating visible PNG with permit template...');
+    const templatePath = path.join(__dirname, '../../outputs/permit-template-IL.png');
+    const templateImage = await sharp(templatePath).ensureAlpha().toBuffer();
+    const metadata = await sharp(templateImage).metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+
+    // Create a canvas to draw text overlays
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    // Draw the template image as background
+    const img = await loadImage(templateImage);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Overlay parsed data at correct positions (example positions, adjust as needed)
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#000';
+    ctx.textBaseline = 'top';
+    const parseResult = routeData.parseResult || {};
+    // Company Name
+    if (parseResult.companyName) ctx.fillText(parseResult.companyName, 110, 38);
+    // Address
+    if (parseResult.address) ctx.fillText(parseResult.address, 110, 58);
+    // City/State/Zip
+    if (parseResult.cityStateZip) ctx.fillText(parseResult.cityStateZip, 110, 78);
+    // Contact Name
+    if (parseResult.contactName) ctx.fillText(parseResult.contactName, 110, 98);
+    // Phone
+    if (parseResult.phone) ctx.fillText(parseResult.phone, 110, 118);
+    // Permit Number
+    if (parseResult.permitNumber) ctx.fillText(parseResult.permitNumber, 90, height - 60);
+    // Expiration Date
+    if (parseResult.expirationDate) ctx.fillText(parseResult.expirationDate, 320, height - 40);
+    // Add more fields as needed, mapping to correct coordinates
+
+    // Convert canvas to PNG buffer
+    const pngBuffer = canvas.toBuffer('image/png');
+    logger.info(`Created permit PNG with overlays: ${pngBuffer.length} bytes`);
     return pngBuffer;
   } catch (error) {
     logger.error(`Failed to create visible PNG: ${error.message}`);
