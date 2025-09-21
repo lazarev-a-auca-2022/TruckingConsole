@@ -89,8 +89,24 @@ async function parsePermit(filePath, state) {
       
       // Use OpenRouter for intelligent text extraction
       const result = await ocr.processPermit(filePath, templatePath);
-      extractedText = result.extractedData.rawText || 
-                     Object.values(result.extractedData.extractedFields).join(' ');
+      
+      // Try to get text from rawText first, then from extracted fields
+      extractedText = result.extractedData.rawText;
+      
+      if (!extractedText || extractedText.trim().length === 0) {
+        // If no rawText, try to combine extracted fields
+        const fieldValues = Object.values(result.extractedData.extractedFields).filter(v => v && v.trim());
+        extractedText = fieldValues.join(' ');
+      }
+      
+      // If still no text, use a fallback approach
+      if (!extractedText || extractedText.trim().length === 0) {
+        logger.warn('No text extracted via structured approach, requesting raw OCR from DeepSeek');
+        // Make a simple OCR request for raw text
+        const simpleOcr = new OpenRouterOCR();
+        const rawOcrResult = await simpleOcr.extractRawText(filePath);
+        extractedText = rawOcrResult;
+      }
       
       logger.info(`OpenRouter OCR completed with confidence: ${result.extractedData.confidence}`);
     } else {
