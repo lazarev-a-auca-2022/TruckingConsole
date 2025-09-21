@@ -18,6 +18,13 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files
 app.use(express.static('public'));
 
+// Request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  logger.info(`🌐 ${timestamp} - ${req.method} ${req.url} - IP: ${req.ip} - User-Agent: ${req.get('User-Agent')?.substring(0, 100)}`);
+  next();
+});
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -201,6 +208,11 @@ app.get('/api/debug-png', async (req, res) => {
 app.get('/api/convert-png/:routeId', async (req, res) => {
   const startTime = Date.now();
   
+  // Add console.log for immediate debugging
+  console.log('🔥 PNG CONVERSION REQUEST RECEIVED');
+  console.log('🔥 Route ID:', req.params.routeId);
+  console.log('🔥 Headers:', req.headers);
+  
   try {
     const { routeId } = req.params;
     logger.info(`=== PNG CONVERSION REQUEST START ===`);
@@ -208,18 +220,24 @@ app.get('/api/convert-png/:routeId', async (req, res) => {
     logger.info(`Request IP: ${req.ip}`);
     logger.info(`User Agent: ${req.get('User-Agent')}`);
     
+    console.log('🔥 Starting PNG generation...');
+    
     // Try to get cached route data first
     const cachedData = getCachedRouteData(routeId);
     let pngData;
     
     if (cachedData) {
+      console.log('🔥 Found cached data');
       logger.info('✅ Found cached route data');
       logger.info(`Cached data keys: ${Object.keys(cachedData)}`);
       pngData = await generateConvertedPng(cachedData);
     } else {
+      console.log('🔥 No cached data, using placeholder');
       logger.info('⚠️  No cached data found, using placeholder');
       pngData = await generateConvertedPngById(routeId);
     }
+    
+    console.log('🔥 PNG generation completed:', pngData ? pngData.length : 'null', 'bytes');
     
     if (!pngData) {
       throw new Error('PNG generation returned null/undefined');
@@ -237,6 +255,8 @@ app.get('/api/convert-png/:routeId', async (req, res) => {
     logger.info(`✅ PNG generated successfully: ${pngData.length} bytes`);
     logger.info(`PNG starts with: ${pngData.slice(0, 8).toString('hex')}`);
     
+    console.log('🔥 Setting response headers...');
+    
     // Set response headers
     res.set({
       'Content-Type': 'image/png',
@@ -246,17 +266,22 @@ app.get('/api/convert-png/:routeId', async (req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     
+    console.log('🔥 Sending PNG response...');
     logger.info(`📤 Sending PNG response...`);
     
     // Send the PNG data
     res.send(pngData);
     
     const endTime = Date.now();
+    console.log('🔥 PNG response sent successfully in', endTime - startTime, 'ms');
     logger.info(`✅ PNG response sent successfully in ${endTime - startTime}ms`);
     logger.info(`=== PNG CONVERSION REQUEST END ===`);
 
   } catch (error) {
     const endTime = Date.now();
+    console.log('🔥 PNG CONVERSION ERROR:', error.message);
+    console.log('🔥 Error stack:', error.stack);
+    
     logger.error(`❌ PNG CONVERSION ERROR (${endTime - startTime}ms):`);
     logger.error(`Error message: ${error.message}`);
     logger.error(`Error stack: ${error.stack}`);
@@ -293,10 +318,21 @@ app.get('/api/gpx/:routeId', async (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  console.log('🔥 Health check requested');
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+// Simple test endpoint to check if routes are working
+app.get('/api/test-route/:id', (req, res) => {
+  console.log('🔥 Test route requested with ID:', req.params.id);
+  res.json({
+    message: 'Test route working',
+    id: req.params.id,
+    timestamp: new Date().toISOString()
   });
 });
 
