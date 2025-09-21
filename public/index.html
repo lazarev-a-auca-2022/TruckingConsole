@@ -411,10 +411,26 @@
             if (!processResult) return;
             
             try {
+                showStatus('Starting download...', 'processing');
+                
                 const response = await fetch(`/api/convert-png/${processResult.data.routeId}`);
-                if (!response.ok) throw new Error('Download failed');
+                
+                console.log('Download response status:', response.status);
+                console.log('Download response headers:', [...response.headers.entries()]);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Download error response:', errorText);
+                    throw new Error(`Download failed (${response.status}): ${errorText}`);
+                }
                 
                 const blob = await response.blob();
+                console.log('Download blob size:', blob.size, 'type:', blob.type);
+                
+                if (blob.size === 0) {
+                    throw new Error('Downloaded file is empty');
+                }
+                
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -424,7 +440,10 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 
+                showStatus('Download completed successfully!', 'success');
+                
             } catch (error) {
+                console.error('Download error:', error);
                 showStatus(`Download failed: ${error.message}`, 'error');
             }
         }

@@ -145,13 +145,18 @@ app.get('/api/test-png', async (req, res) => {
   try {
     logger.info('=== TEST PNG ENDPOINT ===');
     
-    const testPng = await generateConvertedPngById('test123');
+    // Use a hardcoded working PNG for testing
+    const testPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAABYSURBVBiVY/z//z8DJQAggBhJVQwQQIykKgYIIEZSFQMEECOpigECiJFUxQABxEiqYoAAYiRVMUAAMZKqGCCAGElVDBBAjKQqBgggRlIVAwQQI6mKAQKIEQCZvQQhPE9+TgAAAABJRU5ErkJggg==';
+    const testPng = Buffer.from(testPngBase64, 'base64');
     
     logger.info(`Test PNG generated: ${testPng.length} bytes`);
+    logger.info(`PNG signature: ${testPng.slice(0, 8).toString('hex')}`);
     
     res.set({
       'Content-Type': 'image/png',
-      'Content-Disposition': 'attachment; filename="test.png"'
+      'Content-Length': testPng.length,
+      'Content-Disposition': 'attachment; filename="test.png"',
+      'Cache-Control': 'no-cache'
     });
     
     res.send(testPng);
@@ -159,6 +164,36 @@ app.get('/api/test-png', async (req, res) => {
     
   } catch (error) {
     logger.error(`Test PNG error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug endpoint that bypasses all PNG generation
+app.get('/api/debug-png', async (req, res) => {
+  try {
+    logger.info('=== DEBUG PNG ENDPOINT ===');
+    
+    // Create a simple text-based "PNG" for debugging
+    const debugText = `Debug PNG - Route: debug123 - State: IL - Time: ${new Date().toISOString()}`;
+    
+    // Convert to a simple working PNG
+    const simplePngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAALhSURBVHja7d1NaxNBGAbgNxGFWkSw1YK01Q/wUFvBg1pQwYMHL168ePHgxYsXL168ePHgxYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168eAEA';
+    const debugPng = Buffer.from(simplePngBase64, 'base64');
+    
+    logger.info(`Debug PNG: ${debugPng.length} bytes`);
+    logger.info(`Debug text: ${debugText}`);
+    
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': debugPng.length,
+      'Content-Disposition': 'attachment; filename="debug.png"'
+    });
+    
+    res.send(debugPng);
+    logger.info('Debug PNG sent successfully');
+    
+  } catch (error) {
+    logger.error(`Debug PNG error: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
 });

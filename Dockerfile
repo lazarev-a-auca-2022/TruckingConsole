@@ -15,6 +15,7 @@ COPY public/ ./public/
 COPY debug-png.js ./
 COPY quick-test.js ./
 COPY container-test.js ./
+COPY simple-test.js ./
 COPY .env.example ./.env
 
 # Create uploads directory
