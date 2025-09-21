@@ -5,7 +5,7 @@ const fs = require('fs-extra');
 const { parsePermit } = require('./services/permitParser');
 const { generateMapsUrlById } = require('./services/mapsService');
 const { generateGpxById } = require('./services/gpxService');
-const { generateConvertedPngById, getCachedRouteData, cacheRouteData } = require('./services/pngConverter');
+const { generateConvertedPng, generateConvertedPngById, getCachedRouteData, cacheRouteData } = require('./services/pngConverter');
 const { connectDatabase } = require('./config/database');
 const logger = require('./utils/logger');
 
