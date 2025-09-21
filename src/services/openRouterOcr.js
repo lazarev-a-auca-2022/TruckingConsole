@@ -84,7 +84,7 @@ Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792p
       logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
 
       const response = await axios.post(this.baseUrl, {
-        model: "openai/gpt-4o-mini",  // Use smaller, more reliable model
+        model: "deepseek/deepseek-chat-v3.1:free",  // Use DeepSeek vision model
         messages: [
           {
             role: "user",
