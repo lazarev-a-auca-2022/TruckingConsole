@@ -20,6 +20,8 @@ class OpenRouterOCR {
   async analyzeTemplate(templatePath) {
     try {
       logger.info(`Analyzing permit template: ${templatePath}`);
+      logger.info(`OpenRouter API Key available: ${!!this.apiKey}`);
+      logger.info(`API Key prefix: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'none'}`);
       
       // Check cache first
       if (this.templateAnalysis.has(templatePath)) {
@@ -101,7 +103,9 @@ Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792p
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://trucking-console.app',
+          'X-Title': 'Trucking Console OCR'
         }
       });
 
@@ -199,7 +203,9 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://trucking-console.app',
+          'X-Title': 'Trucking Console OCR'
         }
       });
 
