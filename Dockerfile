@@ -36,7 +36,7 @@ COPY simple-test.js ./
 COPY route-test.js ./
 COPY complete-test.js ./
 COPY test-openrouter-ocr.js ./
-COPY .env.example ./.env
+COPY .env.example ./
 
 # Create uploads directory
 RUN mkdir -p uploads temp
