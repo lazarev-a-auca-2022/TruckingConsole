@@ -7,8 +7,12 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "jest",
+    "test-images": "node test-images.js",
     "docker:build": "docker build -t trucking-console .",
-    "docker:run": "docker run -p 3000:3000 trucking-console"
+    "docker:run": "docker run -p 3000:3000 trucking-console",
+    "deploy": "docker-compose up --build -d",
+    "deploy:logs": "docker-compose logs -f",
+    "deploy:stop": "docker-compose down"
   },
   "keywords": [
     "trucking",
