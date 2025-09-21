@@ -80,11 +80,11 @@ Look for fields like:
 Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792px).`;
 
       logger.info(`Making API request to: ${this.baseUrl}`);
-      logger.info(`Request model: deepseek/deepseek-chat-v3.1:free`);
+      logger.info(`Request model: google/gemini-flash-1.5`);
       logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
 
       const response = await axios.post(this.baseUrl, {
-        model: "deepseek/deepseek-chat-v3.1:free",  // Use DeepSeek vision model
+        model: "google/gemini-flash-1.5",  // Free vision model alternative
         messages: [
           {
             role: "user",
@@ -110,7 +110,8 @@ Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792p
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://trucking-console.app',
           'X-Title': 'Trucking Console OCR'
-        }
+        },
+        timeout: 30000  // 30 second timeout
       });
 
       const content = response.data.choices[0].message.content;
@@ -188,7 +189,7 @@ Please return a JSON object with the extracted text mapped to field names:
 Focus on accuracy - only include text you're confident about. Leave fields empty if uncertain.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "deepseek/deepseek-chat-v3.1:free", 
+        model: "google/gemini-flash-1.5", 
         messages: [
           {
             role: "user",
@@ -367,7 +368,7 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
       const prompt = `Extract ALL visible text from this permit image. Return only the raw text without any formatting or structure. Include company names, addresses, numbers, dates, and any other text you can see.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "deepseek/deepseek-chat-v3.1:free",
+        model: "openai/gpt-4o-mini",
         messages: [
           {
             role: "user",
