@@ -9,9 +9,10 @@ COPY package*.json ./
 
 # Install dependencies (including sharp and canvas for PNG generation)
 RUN apk add --no-cache --virtual .gyp python3 make g++ \
-  && npm install --only=production \
-  && npm install sharp canvas \
-  && apk del .gyp
+    && apk add --no-cache pkgconfig pixman-dev cairo-dev pango-dev jpeg-dev giflib-dev \
+    && npm install --only=production \
+    && npm install sharp canvas \
+    && apk del .gyp
 
 # Copy source code
 COPY src/ ./src/
