@@ -79,8 +79,12 @@ Look for fields like:
 
 Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792px).`;
 
+      logger.info(`Making API request to: ${this.baseUrl}`);
+      logger.info(`Request model: openai/gpt-4o-mini`);
+      logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
+
       const response = await axios.post(this.baseUrl, {
-        model: "openai/gpt-4o",
+        model: "openai/gpt-4o-mini",  // Use smaller, more reliable model
         messages: [
           {
             role: "user",
@@ -135,6 +139,10 @@ Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792p
 
     } catch (error) {
       logger.error(`Template analysis failed: ${error.message}`);
+      if (error.response) {
+        logger.error(`Response status: ${error.response.status}`);
+        logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
       // Return default Illinois template on error
       return this.getDefaultIllinoisTemplate();
     }

@@ -2,7 +2,6 @@ const fs = require('fs-extra');
 const PDFParser = require('pdf2json');
 const path = require('path');
 const logger = require('../utils/logger');
-const { extractTextFromImage, isImageFile } = require('./ocrService');
 const OpenRouterOCR = require('./openRouterOcr');
 const { parseIllinois } = require('../parsers/illinoisParser');
 const { parseWisconsin } = require('../parsers/wisconsinParser');
@@ -80,25 +79,20 @@ async function parsePermit(filePath, state) {
     } else if (isImageFile(filePath)) {
       logger.info('Processing image file with OpenRouter OCR...');
       
-      // Try OpenRouter OCR first, fallback to Tesseract
-      try {
-        if (process.env.OPENROUTER_API_KEY) {
-          const ocr = new OpenRouterOCR();
-          const templatePath = path.join(__dirname, '../../outputs/permit-template-IL.png');
-          
-          // Use OpenRouter for intelligent text extraction
-          const result = await ocr.processPermit(filePath, templatePath);
-          extractedText = result.extractedData.rawText || 
-                         Object.values(result.extractedData.extractedFields).join(' ');
-          
-          logger.info(`OpenRouter OCR completed with confidence: ${result.extractedData.confidence}`);
-        } else {
-          throw new Error('OpenRouter API key not available');
-        }
-      } catch (openRouterError) {
-        logger.warn(`OpenRouter OCR failed: ${openRouterError.message}, falling back to Tesseract`);
-        extractedText = await extractTextFromImage(filePath);
+      // Use OpenRouter OCR only - no Tesseract fallback
+      if (!process.env.OPENROUTER_API_KEY) {
+        throw new Error('OpenRouter API key is required for image processing. Please set OPENROUTER_API_KEY environment variable.');
       }
+      
+      const ocr = new OpenRouterOCR();
+      const templatePath = path.join(__dirname, '../../outputs/permit-template-IL.png');
+      
+      // Use OpenRouter for intelligent text extraction
+      const result = await ocr.processPermit(filePath, templatePath);
+      extractedText = result.extractedData.rawText || 
+                     Object.values(result.extractedData.extractedFields).join(' ');
+      
+      logger.info(`OpenRouter OCR completed with confidence: ${result.extractedData.confidence}`);
     } else {
       throw new Error(`Unsupported file format: ${fileExtension}. Supported formats: .pdf, .png, .jpg, .jpeg, .gif, .bmp, .tiff, .webp`);
     }
@@ -140,7 +134,18 @@ function generateRouteId() {
   return 'route_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
+/**
+ * Determine if a file is an image based on its extension
+ */
+function isImageFile(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'];
+  return imageExtensions.includes(ext);
+}
+
 module.exports = {
   parsePermit,
-  extractTextFromPdf
+  extractTextFromPdf,
+  generateRouteId,
+  isImageFile
 };
