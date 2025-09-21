@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const { getCachedRouteData } = require('./pngConverter');
 
 /**
  * Generate Google Maps URL from route data
@@ -31,11 +32,26 @@ async function generateMapsUrl(routeData) {
       waypoints.push(encodeURIComponent(parseResult.endPoint.address));
     }
     
+    // If we don't have enough real waypoints, create a generic route for the state
     if (waypoints.length < 2) {
-      throw new Error('Insufficient waypoints to generate route');
+      logger.warn('Insufficient waypoints, creating state-based route');
+      const state = routeData.state || 'IL';
+      const stateNames = {
+        'IL': 'Illinois',
+        'WI': 'Wisconsin', 
+        'MO': 'Missouri',
+        'ND': 'North Dakota',
+        'IN': 'Indiana'
+      };
+      
+      const stateName = stateNames[state] || 'Illinois';
+      const mapsUrl = `https://www.google.com/maps/search/truck+routes+${stateName}?travelmode=driving`;
+      
+      logger.info(`Generated state-based Maps URL for ${stateName}`);
+      return mapsUrl;
     }
     
-    // Google Maps URL format
+    // Google Maps URL format with actual waypoints
     const origin = waypoints[0];
     const destination = waypoints[waypoints.length - 1];
     const intermediateWaypoints = waypoints.slice(1, -1);
@@ -65,12 +81,31 @@ async function generateMapsUrl(routeData) {
  */
 async function generateMapsUrlById(routeId) {
   try {
-    // In a real implementation, you would fetch route data from database
-    // For now, return a placeholder URL
-    const placeholderUrl = `https://www.google.com/maps/dir/?api=1&destination=${routeId}`;
+    logger.info(`Generating Maps URL for route: ${routeId}`);
     
-    logger.info(`Generated placeholder Maps URL for route: ${routeId}`);
-    return placeholderUrl;
+    // Try to get cached route data first
+    const cachedData = getCachedRouteData(routeId);
+    
+    if (cachedData) {
+      logger.info('✅ Found cached route data for Maps URL generation');
+      return await generateMapsUrl(cachedData);
+    } else {
+      logger.warn('⚠️  No cached data found, generating placeholder Maps URL');
+      
+      // Create a fallback URL that searches for the general area based on state
+      let searchLocation = 'Illinois'; // Default
+      
+      // Try to determine state from route ID or use default
+      if (routeId.includes('wi')) searchLocation = 'Wisconsin';
+      else if (routeId.includes('mo')) searchLocation = 'Missouri';
+      else if (routeId.includes('nd')) searchLocation = 'North Dakota';
+      else if (routeId.includes('in')) searchLocation = 'Indiana';
+      
+      const fallbackUrl = `https://www.google.com/maps/search/truck+routes+${searchLocation}`;
+      
+      logger.info(`Generated fallback Maps URL for ${searchLocation}`);
+      return fallbackUrl;
+    }
     
   } catch (error) {
     logger.error(`Maps URL generation by ID error: ${error.message}`);
