@@ -143,19 +143,29 @@ app.get('/api/maps-url/:routeId', async (req, res) => {
 app.get('/api/convert-png/:routeId', async (req, res) => {
   try {
     const { routeId } = req.params;
+    logger.info(`PNG conversion request for route: ${routeId}`);
     
     // Try to get cached route data first
     const cachedData = getCachedRouteData(routeId);
     let pngData;
     
     if (cachedData) {
+      logger.info('Using cached route data for PNG generation');
       pngData = await generateConvertedPng(cachedData);
     } else {
+      logger.info('Using placeholder data for PNG generation');
       pngData = await generateConvertedPngById(routeId);
     }
     
+    if (!pngData || pngData.length === 0) {
+      throw new Error('Generated PNG data is empty');
+    }
+    
+    logger.info(`Sending PNG response (${pngData.length} bytes)`);
+    
     res.set({
       'Content-Type': 'image/png',
+      'Content-Length': pngData.length,
       'Content-Disposition': `attachment; filename="converted_permit_${routeId}.png"`
     });
     
@@ -163,6 +173,7 @@ app.get('/api/convert-png/:routeId', async (req, res) => {
 
   } catch (error) {
     logger.error(`PNG conversion API error: ${error.message}`);
+    logger.error(`Error stack: ${error.stack}`);
     res.status(500).json({
       success: false,
       error: error.message

@@ -1,5 +1,4 @@
 const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('../utils/logger');
@@ -24,8 +23,9 @@ async function extractTextFromImage(imagePath) {
       throw new Error(`Unsupported image format: ${ext}. Supported formats: ${supportedFormats.join(', ')}`);
     }
     
-    // Preprocess image for better OCR results
-    const preprocessedPath = await preprocessImage(imagePath);
+    // For now, use original image without preprocessing to avoid Sharp dependency
+    // const preprocessedPath = await preprocessImage(imagePath);
+    const preprocessedPath = imagePath;
     
     logger.info('Running OCR with Tesseract...');
     
@@ -63,32 +63,14 @@ async function extractTextFromImage(imagePath) {
 }
 
 /**
- * Preprocess image to improve OCR accuracy
+ * Preprocess image to improve OCR accuracy (disabled for now)
  */
 async function preprocessImage(imagePath) {
   try {
-    const tempDir = './temp';
-    await fs.ensureDir(tempDir);
-    
-    const filename = path.basename(imagePath, path.extname(imagePath));
-    const preprocessedPath = path.join(tempDir, `${filename}_processed.png`);
-    
-    logger.info('Preprocessing image for better OCR results...');
-    
-    // Use Sharp to enhance the image
-    await sharp(imagePath)
-      .resize(null, 1200, { 
-        withoutEnlargement: true,
-        fit: 'inside'
-      })
-      .grayscale()
-      .normalize()
-      .sharpen()
-      .png({ quality: 100 })
-      .toFile(preprocessedPath);
-    
-    logger.info(`Image preprocessed and saved to: ${preprocessedPath}`);
-    return preprocessedPath;
+    // Preprocessing disabled to avoid Sharp dependency
+    // In production, you would use Sharp or similar library
+    logger.info('Image preprocessing skipped (Sharp dependency removed)');
+    return imagePath;
     
   } catch (error) {
     logger.error(`Image preprocessing failed: ${error.message}`);
@@ -107,17 +89,18 @@ function isImageFile(filePath) {
 }
 
 /**
- * Get image metadata
+ * Get image metadata (disabled for now)
  */
 async function getImageMetadata(imagePath) {
   try {
-    const metadata = await sharp(imagePath).metadata();
+    // Metadata extraction disabled to avoid Sharp dependency
+    logger.info('Image metadata extraction skipped (Sharp dependency removed)');
     return {
-      width: metadata.width,
-      height: metadata.height,
-      format: metadata.format,
-      density: metadata.density,
-      hasAlpha: metadata.hasAlpha
+      width: 'unknown',
+      height: 'unknown',
+      format: path.extname(imagePath).substring(1),
+      density: 'unknown',
+      hasAlpha: false
     };
   } catch (error) {
     logger.error(`Failed to get image metadata: ${error.message}`);
