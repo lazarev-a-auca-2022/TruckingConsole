@@ -84,6 +84,7 @@ app.get('/api', (req, res) => {
 });
 
 app.post('/api/parse', upload.single('permit'), async (req, res) => {
+  let tempFilePath = null;
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -95,15 +96,19 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     }
 
     logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state}`);
+    tempFilePath = req.file.path;
 
     const result = await parsePermit(req.file.path, state);
     
-    // Cache the route data for PNG conversion
-    cacheRouteData(result.routeId, result);
+    // Cache the route data for PNG conversion (including original file path)
+    cacheRouteData(result.routeId, {
+      ...result,
+      originalImagePath: req.file.path // Keep path for OpenRouter OCR
+    });
     
-    // Clean up uploaded file
-    await fs.remove(req.file.path);
-
+    // Note: Don't clean up file immediately - needed for PNG generation
+    // File will be cleaned up after PNG generation or on server restart
+    
     res.json({
       success: true,
       data: result,
@@ -114,8 +119,8 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     logger.error(`Parse API error: ${error.message}`);
     
     // Clean up uploaded file on error
-    if (req.file?.path) {
-      await fs.remove(req.file.path).catch(() => {});
+    if (tempFilePath) {
+      await fs.remove(tempFilePath).catch(() => {});
     }
 
     res.status(500).json({

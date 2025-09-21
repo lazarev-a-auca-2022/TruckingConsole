@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const logger = require('../utils/logger');
 const sharp = require('sharp');
+const OpenRouterOCR = require('./openRouterOcr');
 
 /**
  * Generate a simple converted PNG (without Sharp dependency for now)
@@ -60,11 +61,11 @@ async function generateConvertedPngById(routeId) {
 }
 
 /**
- * Create a visible PNG with route information (using HTML5 Canvas simulation)
+ * Create a visible PNG with route information using OpenRouter OCR
  */
 async function createVisiblePng(routeData) {
   try {
-    logger.info('Creating visible PNG with permit template...');
+    logger.info('Creating visible PNG with OpenRouter OCR...');
     const templatePath = path.join(__dirname, '../../outputs/permit-template-IL.png');
     
     logger.info(`Looking for template at: ${templatePath}`);
@@ -83,6 +84,45 @@ async function createVisiblePng(routeData) {
       return await createSimplePng(routeData);
     }
 
+    // Check if we have OpenRouter API key
+    if (!process.env.OPENROUTER_API_KEY) {
+      logger.warn('OpenRouter API key not found, using simple text overlay');
+      return await createSimpleTextOverlay(routeData, templatePath);
+    }
+
+    // Check if we have original permit image path in routeData
+    const originalImagePath = routeData.filePath || routeData.originalImagePath;
+    if (!originalImagePath || !await fs.pathExists(originalImagePath)) {
+      logger.warn('Original permit image not available, using simple text overlay');
+      return await createSimpleTextOverlay(routeData, templatePath);
+    }
+
+    try {
+      // Use OpenRouter OCR to process the permit
+      const ocr = new OpenRouterOCR();
+      const result = await ocr.processPermit(originalImagePath, templatePath);
+      
+      logger.info(`OpenRouter OCR completed with confidence: ${result.extractedData.confidence}`);
+      return result.filledPermitBuffer;
+      
+    } catch (ocrError) {
+      logger.error(`OpenRouter OCR failed: ${ocrError.message}, falling back to simple overlay`);
+      return await createSimpleTextOverlay(routeData, templatePath);
+    }
+    
+  } catch (error) {
+    logger.error(`Failed to create visible PNG: ${error.message}`);
+    logger.error(`Error stack: ${error.stack}`);
+    // Fallback to simple PNG
+    return await createSimplePng(routeData);
+  }
+}
+
+/**
+ * Create simple text overlay (fallback when OpenRouter is not available)
+ */
+async function createSimpleTextOverlay(routeData, templatePath) {
+  try {
     const parseResult = routeData.parseResult || {};
     
     // Load template first
@@ -119,14 +159,12 @@ async function createVisiblePng(routeData) {
       .png()
       .toBuffer();
 
-    logger.info(`Created permit PNG with overlays: ${result.length} bytes`);
+    logger.info(`Created permit PNG with simple overlays: ${result.length} bytes`);
     return result;
     
   } catch (error) {
-    logger.error(`Failed to create visible PNG: ${error.message}`);
-    logger.error(`Error stack: ${error.stack}`);
-    // Fallback to simple PNG
-    return await createSimplePng(routeData);
+    logger.error(`Simple text overlay failed: ${error.message}`);
+    throw error;
   }
 }
 

@@ -103,7 +103,8 @@ async function parsePermit(filePath, state) {
       originalText: extractedText,
       parseResult,
       timestamp: new Date().toISOString(),
-      filePath: path.basename(filePath)
+      filePath: filePath, // Keep full path for OpenRouter OCR
+      fileName: path.basename(filePath)
     };
     
     logger.info(`Successfully parsed permit for state: ${state}`);
