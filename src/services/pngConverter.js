@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('../utils/logger');
+const sharp = require('sharp');
 
 /**
  * Generate a simple converted PNG (without Sharp dependency for now)
@@ -68,37 +69,55 @@ async function createVisiblePng(routeData) {
     logger.info('Creating visible PNG with permit template...');
     const templatePath = path.join(__dirname, '../../outputs/permit-template-IL.png');
     
-    // Check if template exists
+    logger.info(`Looking for template at: ${templatePath}`);
+    
+    // Check if template exists and has content
     if (!await fs.pathExists(templatePath)) {
       logger.warn('Template not found, using fallback');
+      return await createSimplePng(routeData);
+    }
+    
+    const templateStats = await fs.stat(templatePath);
+    logger.info(`Template file size: ${templateStats.size} bytes`);
+    
+    if (templateStats.size < 100) {
+      logger.warn('Template file is too small, using fallback');
       return await createSimplePng(routeData);
     }
 
     const parseResult = routeData.parseResult || {};
     
-    // Create SVG overlay with text fields
-    const svgOverlay = `
-      <svg width="612" height="792">
-        <style>
-          .field-text { font-family: Arial, sans-serif; font-size: 12px; fill: black; }
-          .small-text { font-family: Arial, sans-serif; font-size: 10px; fill: black; }
-        </style>
-        ${parseResult.companyName ? `<text x="110" y="58" class="field-text">${parseResult.companyName}</text>` : ''}
-        ${parseResult.address ? `<text x="110" y="78" class="field-text">${parseResult.address}</text>` : ''}
-        ${parseResult.cityStateZip ? `<text x="110" y="98" class="field-text">${parseResult.cityStateZip}</text>` : ''}
-        ${parseResult.contactName ? `<text x="110" y="118" class="field-text">${parseResult.contactName}</text>` : ''}
-        ${parseResult.phone ? `<text x="110" y="138" class="field-text">${parseResult.phone}</text>` : ''}
-        ${parseResult.permitNumber ? `<text x="90" y="750" class="small-text">${parseResult.permitNumber}</text>` : ''}
-        ${parseResult.expirationDate ? `<text x="320" y="770" class="small-text">${parseResult.expirationDate}</text>` : ''}
-      </svg>
-    `;
-
-    // Load template and overlay text
+    // Load template first
     const templateBuffer = await fs.readFile(templatePath);
-    const overlayBuffer = Buffer.from(svgOverlay);
+    logger.info(`Loaded template: ${templateBuffer.length} bytes`);
     
+    // Create a simple text overlay directly on the image
+    const textOverlays = [];
+    
+    if (parseResult.companyName) {
+      textOverlays.push({
+        input: Buffer.from(`<svg width="400" height="30"><text x="0" y="20" font-family="Arial" font-size="14" fill="black">${parseResult.companyName}</text></svg>`),
+        top: 50, left: 110
+      });
+    }
+    
+    if (parseResult.address) {
+      textOverlays.push({
+        input: Buffer.from(`<svg width="400" height="30"><text x="0" y="20" font-family="Arial" font-size="14" fill="black">${parseResult.address}</text></svg>`),
+        top: 70, left: 110
+      });
+    }
+    
+    // If no overlays, just return the template
+    if (textOverlays.length === 0) {
+      logger.info('No text overlays, returning template as-is');
+      const result = await sharp(templateBuffer).png().toBuffer();
+      return result;
+    }
+
+    // Apply text overlays
     const result = await sharp(templateBuffer)
-      .composite([{ input: overlayBuffer, top: 0, left: 0 }])
+      .composite(textOverlays)
       .png()
       .toBuffer();
 
