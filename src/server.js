@@ -140,43 +140,97 @@ app.get('/api/maps-url/:routeId', async (req, res) => {
   }
 });
 
+// Test endpoint for PNG generation
+app.get('/api/test-png', async (req, res) => {
+  try {
+    logger.info('=== TEST PNG ENDPOINT ===');
+    
+    const testPng = await generateConvertedPngById('test123');
+    
+    logger.info(`Test PNG generated: ${testPng.length} bytes`);
+    
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Disposition': 'attachment; filename="test.png"'
+    });
+    
+    res.send(testPng);
+    logger.info('Test PNG sent successfully');
+    
+  } catch (error) {
+    logger.error(`Test PNG error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/convert-png/:routeId', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { routeId } = req.params;
-    logger.info(`PNG conversion request for route: ${routeId}`);
+    logger.info(`=== PNG CONVERSION REQUEST START ===`);
+    logger.info(`Route ID: ${routeId}`);
+    logger.info(`Request IP: ${req.ip}`);
+    logger.info(`User Agent: ${req.get('User-Agent')}`);
     
     // Try to get cached route data first
     const cachedData = getCachedRouteData(routeId);
     let pngData;
     
     if (cachedData) {
-      logger.info('Using cached route data for PNG generation');
+      logger.info('✅ Found cached route data');
+      logger.info(`Cached data keys: ${Object.keys(cachedData)}`);
       pngData = await generateConvertedPng(cachedData);
     } else {
-      logger.info('Using placeholder data for PNG generation');
+      logger.info('⚠️  No cached data found, using placeholder');
       pngData = await generateConvertedPngById(routeId);
     }
     
-    if (!pngData || pngData.length === 0) {
+    if (!pngData) {
+      throw new Error('PNG generation returned null/undefined');
+    }
+    
+    if (!Buffer.isBuffer(pngData)) {
+      logger.error(`PNG data is not a buffer: ${typeof pngData}`);
+      throw new Error('PNG data is not a valid buffer');
+    }
+    
+    if (pngData.length === 0) {
       throw new Error('Generated PNG data is empty');
     }
     
-    logger.info(`Sending PNG response (${pngData.length} bytes)`);
+    logger.info(`✅ PNG generated successfully: ${pngData.length} bytes`);
+    logger.info(`PNG starts with: ${pngData.slice(0, 8).toString('hex')}`);
     
+    // Set response headers
     res.set({
       'Content-Type': 'image/png',
       'Content-Length': pngData.length,
-      'Content-Disposition': `attachment; filename="converted_permit_${routeId}.png"`
+      'Content-Disposition': `attachment; filename="converted_permit_${routeId}.png"`,
+      'Cache-Control': 'no-cache',
+      'Access-Control-Allow-Origin': '*'
     });
     
+    logger.info(`📤 Sending PNG response...`);
+    
+    // Send the PNG data
     res.send(pngData);
+    
+    const endTime = Date.now();
+    logger.info(`✅ PNG response sent successfully in ${endTime - startTime}ms`);
+    logger.info(`=== PNG CONVERSION REQUEST END ===`);
 
   } catch (error) {
-    logger.error(`PNG conversion API error: ${error.message}`);
+    const endTime = Date.now();
+    logger.error(`❌ PNG CONVERSION ERROR (${endTime - startTime}ms):`);
+    logger.error(`Error message: ${error.message}`);
     logger.error(`Error stack: ${error.stack}`);
+    logger.error(`=== PNG CONVERSION REQUEST FAILED ===`);
+    
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });

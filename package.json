@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "test": "jest",
     "test-images": "node test-images.js",
+    "debug-png": "node debug-png.js",
     "docker:build": "docker build -t trucking-console .",
     "docker:run": "docker run -p 3000:3000 trucking-console",
     "deploy": "docker-compose up --build -d",
