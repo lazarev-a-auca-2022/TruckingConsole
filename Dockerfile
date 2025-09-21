@@ -12,6 +12,9 @@ RUN npm install --only=production
 # Copy source code
 COPY src/ ./src/
 COPY public/ ./public/
+COPY debug-png.js ./
+COPY quick-test.js ./
+COPY container-test.js ./
 COPY .env.example ./.env
 
 # Create uploads directory
