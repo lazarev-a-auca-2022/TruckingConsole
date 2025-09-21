@@ -13,9 +13,40 @@
 
 2. **Wait for services to start** (about 30 seconds)
 
-3. **Test with sample permit images:**
+3. **Open the web interface:** http://localhost:3000
+
+## Web Interface Testing
+
+### Upload and Convert
+
+1. **Open your browser** and go to http://localhost:3000
+2. **Select state**: Choose "Illinois (IL)" from the dropdown
+3. **Upload file**: 
+   - Click the upload area or drag and drop
+   - Select `sample-permits/image-2025-06-18-065225.png`
+4. **Process**: Click "Process Permit" button
+5. **Download**: 
+   - Click "Download Converted PNG" for the standardized permit
+   - Click "Download GPX Route" for Garmin-compatible navigation file
+   - Click "Open in Google Maps" to view the route
+
+### Expected Web Interface Flow
+
+1. **File Upload**: Drag-and-drop or click to upload
+2. **Processing**: Shows progress bar and status messages
+3. **Results**: Displays parsing accuracy, route details
+4. **Downloads**: Multiple export options available
 
 ## Testing with Sample Images
+
+### Sample Files Available
+
+The app includes sample permit images:
+- `image-2025-06-18-065225.png`
+- `image-2025-06-18-065229.png` 
+- `image-2025-06-18-065232.png`
+- `image-2025-06-18-065251.png`
+- `image-2025-06-18-065258.png`
 
 ### Using curl (Command Line)
 

@@ -11,6 +11,7 @@ RUN npm install --only=production
 
 # Copy source code
 COPY src/ ./src/
+COPY public/ ./public/
 COPY .env.example ./.env
 
 # Create uploads directory

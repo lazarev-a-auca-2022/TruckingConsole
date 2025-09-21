@@ -13,6 +13,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./temp:/app/temp
+      - ./sample-permits:/app/sample-permits
 
   mongo:
     image: mongo:7

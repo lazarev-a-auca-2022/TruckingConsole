@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trucking Console - Permit Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 600px;
+            width: 90%;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .upload-section {
+            margin-bottom: 2rem;
+        }
+        
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8f0ff;
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+            color: #ddd;
+            margin-bottom: 1rem;
+        }
+        
+        .upload-text {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s ease;
+            margin: 0.5rem;
+        }
+        
+        .btn:hover {
+            background: #5a67d8;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #48bb78;
+        }
+        
+        .btn-secondary:hover {
+            background: #38a169;
+        }
+        
+        .state-selector {
+            margin: 1rem 0;
+        }
+        
+        .state-selector label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .state-selector select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .file-info {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            border-left: 4px solid #667eea;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #667eea;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            text-align: center;
+        }
+        
+        .status.success {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            color: #276749;
+        }
+        
+        .status.error {
+            background: #fed7d7;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+        }
+        
+        .status.processing {
+            background: #ebf8ff;
+            border: 1px solid #90cdf4;
+            color: #2b6cb0;
+        }
+        
+        .result-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+        }
+        
+        .result-info {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        
+        .result-info h3 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+        
+        .result-info p {
+            color: #4a5568;
+            margin: 0.25rem 0;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚛 Trucking Console</h1>
+            <p>Convert truck permits to standardized format</p>
+        </div>
+        
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">
+                    <strong>Click to upload</strong> or drag and drop your permit file
+                </div>
+                <p>Supports PNG, JPG, PDF files up to 10MB</p>
+                <input type="file" id="fileInput" class="file-input" accept=".png,.jpg,.jpeg,.pdf" />
+            </div>
+            
+            <div class="state-selector">
+                <label for="stateSelect">Select State:</label>
+                <select id="stateSelect">
+                    <option value="">Choose state...</option>
+                    <option value="IL">Illinois (IL)</option>
+                    <option value="WI">Wisconsin (WI)</option>
+                    <option value="MO">Missouri (MO)</option>
+                    <option value="ND">North Dakota (ND)</option>
+                    <option value="IN">Indiana (IN)</option>
+                </select>
+            </div>
+            
+            <div id="fileInfo" class="file-info hidden"></div>
+            
+            <div class="progress-bar hidden" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <button id="processBtn" class="btn" disabled>Process Permit</button>
+        </div>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <div id="resultSection" class="result-section hidden">
+            <div id="resultInfo" class="result-info"></div>
+            <button id="downloadBtn" class="btn btn-secondary">Download Converted PNG</button>
+            <button id="downloadGpxBtn" class="btn">Download GPX Route</button>
+            <button id="openMapsBtn" class="btn">Open in Google Maps</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const stateSelect = document.getElementById('stateSelect');
+        const fileInfo = document.getElementById('fileInfo');
+        const processBtn = document.getElementById('processBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const status = document.getElementById('status');
+        const resultSection = document.getElementById('resultSection');
+        const resultInfo = document.getElementById('resultInfo');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadGpxBtn = document.getElementById('downloadGpxBtn');
+        const openMapsBtn = document.getElementById('openMapsBtn');
+        
+        let selectedFile = null;
+        let processResult = null;
+
+        // Upload area events
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+        
+        fileInput.addEventListener('change', handleFileSelect);
+        stateSelect.addEventListener('change', updateProcessButton);
+        processBtn.addEventListener('click', processFile);
+        downloadBtn.addEventListener('click', downloadConverted);
+        downloadGpxBtn.addEventListener('click', downloadGpx);
+        openMapsBtn.addEventListener('click', openMaps);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect({ target: { files } });
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
+            if (!validTypes.includes(file.type)) {
+                showStatus('Please select a PNG, JPG, or PDF file.', 'error');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                showStatus('File size must be less than 10MB.', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            showFileInfo(file);
+            updateProcessButton();
+        }
+
+        function showFileInfo(file) {
+            fileInfo.innerHTML = `
+                <strong>Selected File:</strong> ${file.name}<br>
+                <strong>Size:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                <strong>Type:</strong> ${file.type}
+            `;
+            fileInfo.classList.remove('hidden');
+        }
+
+        function updateProcessButton() {
+            processBtn.disabled = !selectedFile || !stateSelect.value;
+        }
+
+        async function processFile() {
+            if (!selectedFile || !stateSelect.value) return;
+
+            showStatus('Processing permit...', 'processing');
+            showProgress(0);
+            processBtn.disabled = true;
+            resultSection.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('permit', selectedFile);
+            formData.append('state', stateSelect.value);
+
+            try {
+                // Simulate progress
+                const progressInterval = setInterval(() => {
+                    const current = parseInt(progressFill.style.width) || 0;
+                    if (current < 90) {
+                        showProgress(current + 10);
+                    }
+                }, 500);
+
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(progressInterval);
+                showProgress(100);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Processing failed');
+                }
+
+                processResult = await response.json();
+                showResult(processResult);
+                showStatus('Processing completed successfully!', 'success');
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error('Processing error:', error);
+            } finally {
+                processBtn.disabled = false;
+                setTimeout(() => hideProgress(), 2000);
+            }
+        }
+
+        function showResult(result) {
+            const data = result.data;
+            const parseResult = data.parseResult;
+            
+            resultInfo.innerHTML = `
+                <h3>Processing Results</h3>
+                <p><strong>Route ID:</strong> ${data.routeId}</p>
+                <p><strong>State:</strong> ${data.state}</p>
+                <p><strong>File Type:</strong> ${data.fileType.toUpperCase()}</p>
+                <p><strong>Parse Accuracy:</strong> ${(parseResult.parseAccuracy * 100).toFixed(1)}%</p>
+                ${parseResult.startPoint ? `<p><strong>Start:</strong> ${parseResult.startPoint.address || 'Detected'}</p>` : ''}
+                ${parseResult.endPoint ? `<p><strong>End:</strong> ${parseResult.endPoint.address || 'Detected'}</p>` : ''}
+                <p><strong>Waypoints:</strong> ${parseResult.waypoints?.length || 0}</p>
+                <p><strong>Restrictions:</strong> ${parseResult.restrictions?.length || 0}</p>
+            `;
+            
+            resultSection.classList.remove('hidden');
+        }
+
+        async function downloadConverted() {
+            if (!processResult) return;
+            
+            try {
+                const response = await fetch(`/api/convert-png/${processResult.data.routeId}`);
+                if (!response.ok) throw new Error('Download failed');
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `converted_permit_${processResult.data.routeId}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+            } catch (error) {
+                showStatus(`Download failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function downloadGpx() {
+            if (!processResult) return;
+            
+            try {
+                const response = await fetch(`/api/gpx/${processResult.data.routeId}`);
+                if (!response.ok) throw new Error('GPX download failed');
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `route_${processResult.data.routeId}.gpx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+            } catch (error) {
+                showStatus(`GPX download failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function openMaps() {
+            if (!processResult) return;
+            
+            try {
+                const response = await fetch(`/api/maps-url/${processResult.data.routeId}`);
+                if (!response.ok) throw new Error('Maps URL generation failed');
+                
+                const result = await response.json();
+                window.open(result.mapsUrl, '_blank');
+                
+            } catch (error) {
+                showStatus(`Maps opening failed: ${error.message}`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.classList.remove('hidden');
+        }
+
+        function showProgress(percent) {
+            progressBar.classList.remove('hidden');
+            progressFill.style.width = `${percent}%`;
+        }
+
+        function hideProgress() {
+            progressBar.classList.add('hidden');
+            progressFill.style.width = '0%';
+        }
+    </script>
+</body>
+</html>

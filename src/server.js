@@ -5,6 +5,7 @@ const fs = require('fs-extra');
 const { parsePermit } = require('./services/permitParser');
 const { generateMapsUrlById } = require('./services/mapsService');
 const { generateGpxById } = require('./services/gpxService');
+const { generateConvertedPngById, getCachedRouteData, cacheRouteData } = require('./services/pngConverter');
 const { connectDatabase } = require('./config/database');
 const logger = require('./utils/logger');
 
@@ -13,6 +14,9 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files
+app.use(express.static('public'));
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -54,6 +58,11 @@ const upload = multer({
 
 // Routes
 app.get('/', (req, res) => {
+  // Serve the main HTML page
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+app.get('/api', (req, res) => {
   res.json({
     message: 'Trucking Console API',
     version: '1.0.0',
@@ -61,7 +70,8 @@ app.get('/', (req, res) => {
       'POST /api/parse - Upload and parse permit file (PDF or image)',
       'GET /api/routes/:id - Get parsed route details',
       'GET /api/maps-url/:id - Get Google Maps URL',
-      'GET /api/gpx/:id - Download GPX file'
+      'GET /api/gpx/:id - Download GPX file',
+      'GET /api/convert-png/:id - Download converted PNG'
     ]
   });
 });
@@ -80,6 +90,9 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state}`);
 
     const result = await parsePermit(req.file.path, state);
+    
+    // Cache the route data for PNG conversion
+    cacheRouteData(result.routeId, result);
     
     // Clean up uploaded file
     await fs.remove(req.file.path);
@@ -120,6 +133,36 @@ app.get('/api/maps-url/:routeId', async (req, res) => {
 
   } catch (error) {
     logger.error(`Maps URL API error: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/convert-png/:routeId', async (req, res) => {
+  try {
+    const { routeId } = req.params;
+    
+    // Try to get cached route data first
+    const cachedData = getCachedRouteData(routeId);
+    let pngData;
+    
+    if (cachedData) {
+      pngData = await generateConvertedPng(cachedData);
+    } else {
+      pngData = await generateConvertedPngById(routeId);
+    }
+    
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Disposition': `attachment; filename="converted_permit_${routeId}.png"`
+    });
+    
+    res.send(pngData);
+
+  } catch (error) {
+    logger.error(`PNG conversion API error: ${error.message}`);
     res.status(500).json({
       success: false,
       error: error.message

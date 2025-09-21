@@ -4,13 +4,14 @@ A console-only application for parsing truck permit PDF files and converting the
 
 ## Features
 
-- Parse PDF permit files from multiple states
-- OCR processing for image permits (PNG, JPG, JPEG, GIF, BMP, TIFF, WEBP)
-- Extract route information (start/end points, waypoints, restrictions)
-- Generate Google Maps URLs
-- Export routes as GPX files for Garmin devices
-- Console-based interface
-- Docker deployment ready
+- **Web Interface**: Simple file upload with drag-and-drop support
+- **OCR Processing**: Extract text from PNG, JPG, JPEG, GIF, BMP, TIFF, WEBP images
+- **PDF Support**: Parse PDF permit files from multiple states
+- **PNG Conversion**: Generate standardized converted PNG permits
+- **Route Export**: Export routes as GPX files for Garmin devices
+- **Google Maps Integration**: Generate Google Maps URLs for navigation
+- **Console Interface**: Command-line tools for batch processing
+- **Docker Deployment**: Ready for remote server deployment
 
 ## Supported States
 
@@ -55,6 +56,14 @@ npm run docker:run
 
 ## Usage
 
+### Web Interface
+
+1. Open http://localhost:3000 in your browser
+2. Select a state from the dropdown
+3. Upload a permit file (PNG, JPG, or PDF)
+4. Click "Process Permit"
+5. Download the converted PNG or GPX file
+
 ### Command Line Interface
 
 Parse a single PDF or image file:
@@ -76,10 +85,12 @@ node src/index.js server --port 3000
 
 ### API Endpoints (Server Mode)
 
+- `GET /` - Web interface
 - `POST /api/parse` - Upload and parse permit file (PDF or image)
 - `GET /api/routes/:id` - Get parsed route details
 - `GET /api/maps-url/:id` - Get Google Maps URL
 - `GET /api/gpx/:id` - Download GPX file
+- `GET /api/convert-png/:id` - Download converted PNG file
 
 ## Environment Variables
 
