@@ -7,8 +7,11 @@ WORKDIR /app
 COPY package*.json ./
 
 
-# Install dependencies (including sharp for SVG to PNG conversion)
-RUN npm install --only=production && npm install sharp
+# Install dependencies (including sharp and canvas for PNG generation)
+RUN apk add --no-cache --virtual .gyp python3 make g++ \
+  && npm install --only=production \
+  && npm install sharp canvas \
+  && apk del .gyp
 
 # Copy source code
 COPY src/ ./src/
