@@ -1,5 +1,4 @@
 const logger = require('../utils/logger');
-const { getCachedRouteData } = require('./pngConverter');
 
 /**
  * Generate Google Maps URL from route data
@@ -83,29 +82,23 @@ async function generateMapsUrlById(routeId) {
   try {
     logger.info(`Generating Maps URL for route: ${routeId}`);
     
-    // Try to get cached route data first
-    const cachedData = getCachedRouteData(routeId);
+    // Since we don't cache route data anymore, generate a placeholder Maps URL
+    // In a production app, you would fetch the route data from a database
+    logger.warn('⚠️  Route caching disabled, generating placeholder Maps URL');
     
-    if (cachedData) {
-      logger.info('✅ Found cached route data for Maps URL generation');
-      return await generateMapsUrl(cachedData);
-    } else {
-      logger.warn('⚠️  No cached data found, generating placeholder Maps URL');
-      
-      // Create a fallback URL that searches for the general area based on state
-      let searchLocation = 'Illinois'; // Default
-      
-      // Try to determine state from route ID or use default
-      if (routeId.includes('wi')) searchLocation = 'Wisconsin';
-      else if (routeId.includes('mo')) searchLocation = 'Missouri';
-      else if (routeId.includes('nd')) searchLocation = 'North Dakota';
-      else if (routeId.includes('in')) searchLocation = 'Indiana';
-      
-      const fallbackUrl = `https://www.google.com/maps/search/truck+routes+${searchLocation}`;
-      
-      logger.info(`Generated fallback Maps URL for ${searchLocation}`);
-      return fallbackUrl;
-    }
+    // Create a fallback URL that searches for the general area based on state
+    let searchLocation = 'Illinois'; // Default
+    
+    // Try to determine state from route ID or use default
+    if (routeId.includes('wi')) searchLocation = 'Wisconsin';
+    else if (routeId.includes('mo')) searchLocation = 'Missouri';
+    else if (routeId.includes('nd')) searchLocation = 'North Dakota';
+    else if (routeId.includes('in')) searchLocation = 'Indiana';
+    
+    const fallbackUrl = `https://www.google.com/maps/search/truck+routes+${searchLocation}`;
+    
+    logger.info(`Generated fallback Maps URL for ${searchLocation}`);
+    return fallbackUrl;
     
   } catch (error) {
     logger.error(`Maps URL generation by ID error: ${error.message}`);

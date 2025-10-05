@@ -214,7 +214,7 @@
     <div class="container">
         <div class="header">
             <h1>🚛 Trucking Console</h1>
-            <p>Convert truck permits to standardized format</p>
+            <p>Parse trucking permits and generate Google Maps routes</p>
         </div>
         
         <div class="upload-section">
@@ -223,7 +223,7 @@
                 <div class="upload-text">
                     <strong>Click to upload</strong> or drag and drop your permit file
                 </div>
-                <p>Supports PNG, JPG, PDF files up to 10MB</p>
+                <p>Parse route data from permit documents (PNG, JPG, PDF up to 10MB)</p>
                 <input type="file" id="fileInput" class="file-input" accept=".png,.jpg,.jpeg,.pdf" />
             </div>
             
@@ -252,9 +252,8 @@
         
         <div id="resultSection" class="result-section hidden">
             <div id="resultInfo" class="result-info"></div>
-            <button id="downloadBtn" class="btn btn-secondary">Download Converted PNG</button>
-            <button id="downloadGpxBtn" class="btn">Download GPX Route</button>
-            <button id="openMapsBtn" class="btn">Open in Google Maps</button>
+            <button id="openMapsBtn" class="btn">🗺️ Open in Google Maps</button>
+            <button id="downloadGpxBtn" class="btn btn-secondary">📍 Download GPX Route</button>
         </div>
     </div>
 
@@ -269,7 +268,6 @@
         const status = document.getElementById('status');
         const resultSection = document.getElementById('resultSection');
         const resultInfo = document.getElementById('resultInfo');
-        const downloadBtn = document.getElementById('downloadBtn');
         const downloadGpxBtn = document.getElementById('downloadGpxBtn');
         const openMapsBtn = document.getElementById('openMapsBtn');
         
@@ -285,7 +283,6 @@
         fileInput.addEventListener('change', handleFileSelect);
         stateSelect.addEventListener('change', updateProcessButton);
         processBtn.addEventListener('click', processFile);
-        downloadBtn.addEventListener('click', downloadConverted);
         downloadGpxBtn.addEventListener('click', downloadGpx);
         openMapsBtn.addEventListener('click', openMaps);
 
@@ -377,7 +374,7 @@
 
                 processResult = await response.json();
                 showResult(processResult);
-                showStatus('Processing completed successfully!', 'success');
+                showStatus('Route data extracted successfully! Open in Google Maps or download GPX file.', 'success');
 
             } catch (error) {
                 showStatus(`Error: ${error.message}`, 'error');
@@ -405,47 +402,6 @@
             `;
             
             resultSection.classList.remove('hidden');
-        }
-
-        async function downloadConverted() {
-            if (!processResult) return;
-            
-            try {
-                showStatus('Starting download...', 'processing');
-                
-                const response = await fetch(`/api/convert-png/${processResult.data.routeId}`);
-                
-                console.log('Download response status:', response.status);
-                console.log('Download response headers:', [...response.headers.entries()]);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Download error response:', errorText);
-                    throw new Error(`Download failed (${response.status}): ${errorText}`);
-                }
-                
-                const blob = await response.blob();
-                console.log('Download blob size:', blob.size, 'type:', blob.type);
-                
-                if (blob.size === 0) {
-                    throw new Error('Downloaded file is empty');
-                }
-                
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `converted_permit_${processResult.data.routeId}.png`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                showStatus('Download completed successfully!', 'success');
-                
-            } catch (error) {
-                console.error('Download error:', error);
-                showStatus(`Download failed: ${error.message}`, 'error');
-            }
         }
 
         async function downloadGpx() {
