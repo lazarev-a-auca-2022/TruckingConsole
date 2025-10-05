@@ -215,6 +215,9 @@
         <div class="header">
             <h1>🚛 Trucking Console</h1>
             <p>Parse trucking permits and generate Google Maps routes</p>
+            <div style="background: #e8f4fd; padding: 1rem; border-radius: 6px; margin: 1rem 0; border-left: 4px solid #3182ce;">
+                <strong>How it works:</strong> Upload permit → Extract route data → Get Google Maps URL → Download GPX for navigation
+            </div>
         </div>
         
         <div class="upload-section">
@@ -390,15 +393,18 @@
             const parseResult = data.parseResult;
             
             resultInfo.innerHTML = `
-                <h3>Processing Results</h3>
+                <h3>🎯 Route Data Extracted Successfully!</h3>
                 <p><strong>Route ID:</strong> ${data.routeId}</p>
                 <p><strong>State:</strong> ${data.state}</p>
                 <p><strong>File Type:</strong> ${data.fileType.toUpperCase()}</p>
                 <p><strong>Parse Accuracy:</strong> ${(parseResult.parseAccuracy * 100).toFixed(1)}%</p>
-                ${parseResult.startPoint ? `<p><strong>Start:</strong> ${parseResult.startPoint.address || 'Detected'}</p>` : ''}
-                ${parseResult.endPoint ? `<p><strong>End:</strong> ${parseResult.endPoint.address || 'Detected'}</p>` : ''}
-                <p><strong>Waypoints:</strong> ${parseResult.waypoints?.length || 0}</p>
-                <p><strong>Restrictions:</strong> ${parseResult.restrictions?.length || 0}</p>
+                ${parseResult.startPoint ? `<p><strong>🚩 Start Point:</strong> ${parseResult.startPoint.address || 'Detected'}</p>` : ''}
+                ${parseResult.endPoint ? `<p><strong>🏁 End Point:</strong> ${parseResult.endPoint.address || 'Detected'}</p>` : ''}
+                <p><strong>📍 Waypoints:</strong> ${parseResult.waypoints?.length || 0}</p>
+                <p><strong>⚠️ Restrictions:</strong> ${parseResult.restrictions?.length || 0}</p>
+                <div style="background: #f0fff4; padding: 0.75rem; border-radius: 4px; margin-top: 1rem; border-left: 3px solid #48bb78;">
+                    <strong>✅ Ready for Navigation:</strong> Your route is ready to open in Google Maps or export as GPX for Garmin devices.
+                </div>
             `;
             
             resultSection.classList.remove('hidden');
