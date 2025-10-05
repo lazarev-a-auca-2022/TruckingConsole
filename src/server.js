@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const { parsePermit } = require('./services/permitParser');
-const { generateMapsUrlById } = require('./services/mapsService');
+const { generateMapsUrlById, cacheRouteData } = require('./services/mapsService');
 const { generateGpxById } = require('./services/gpxService');
 const { connectDatabase } = require('./config/database');
 const logger = require('./utils/logger');
@@ -103,6 +103,9 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     tempFilePath = req.file.path;
 
     const result = await parsePermit(req.file.path, state);
+    
+    // Cache the route data for later Maps URL generation
+    cacheRouteData(result.routeId, result);
     
     // Clean up uploaded file after processing
     await fs.remove(tempFilePath).catch(() => {});

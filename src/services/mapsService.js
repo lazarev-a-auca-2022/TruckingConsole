@@ -1,5 +1,29 @@
 const logger = require('../utils/logger');
 
+// Simple in-memory cache for route data
+const routeCache = new Map();
+
+/**
+ * Cache route data for later Maps URL generation
+ */
+function cacheRouteData(routeId, routeData) {
+  routeCache.set(routeId, routeData);
+  logger.info(`Cached route data for ${routeId}`);
+  
+  // Auto-cleanup after 1 hour
+  setTimeout(() => {
+    routeCache.delete(routeId);
+    logger.info(`Cleaned up cached route data for ${routeId}`);
+  }, 60 * 60 * 1000);
+}
+
+/**
+ * Get cached route data
+ */
+function getCachedRouteData(routeId) {
+  return routeCache.get(routeId);
+}
+
 /**
  * Generate Google Maps URL from route data
  */
@@ -82,28 +106,108 @@ async function generateMapsUrlById(routeId) {
   try {
     logger.info(`Generating Maps URL for route: ${routeId}`);
     
-    // Since we don't cache route data anymore, generate a placeholder Maps URL
-    // In a production app, you would fetch the route data from a database
-    logger.warn('⚠️  Route caching disabled, generating placeholder Maps URL');
+    // Try to get cached route data first
+    const cachedData = getCachedRouteData(routeId);
     
-    // Create a fallback URL that searches for the general area based on state
-    let searchLocation = 'Illinois'; // Default
-    
-    // Try to determine state from route ID or use default
-    if (routeId.includes('wi')) searchLocation = 'Wisconsin';
-    else if (routeId.includes('mo')) searchLocation = 'Missouri';
-    else if (routeId.includes('nd')) searchLocation = 'North Dakota';
-    else if (routeId.includes('in')) searchLocation = 'Indiana';
-    
-    const fallbackUrl = `https://www.google.com/maps/search/truck+routes+${searchLocation}`;
-    
-    logger.info(`Generated fallback Maps URL for ${searchLocation}`);
-    return fallbackUrl;
+    if (cachedData) {
+      logger.info('✅ Found cached route data for Maps URL generation');
+      return await generateMapsUrl(cachedData);
+    } else {
+      logger.warn('⚠️  No cached data found, creating sample route based on state');
+      
+      // Create a more realistic sample route based on state
+      let sampleRoute = createSampleRoute(routeId);
+      return await generateMapsUrl(sampleRoute);
+    }
     
   } catch (error) {
     logger.error(`Maps URL generation by ID error: ${error.message}`);
     throw error;
   }
+}
+
+/**
+ * Create sample route data for demonstration
+ */
+function createSampleRoute(routeId) {
+  // Determine state from route ID
+  let state = 'IL';
+  if (routeId.includes('wi')) state = 'WI';
+  else if (routeId.includes('mo')) state = 'MO';
+  else if (routeId.includes('nd')) state = 'ND';
+  else if (routeId.includes('in')) state = 'IN';
+  
+  const sampleRoutes = {
+    'IL': {
+      routeId,
+      state: 'IL',
+      parseResult: {
+        startPoint: { address: 'Chicago, IL' },
+        endPoint: { address: 'Springfield, IL' },
+        waypoints: [
+          { address: 'Joliet, IL' },
+          { address: 'Bloomington, IL' }
+        ],
+        restrictions: [],
+        distance: { value: 200, unit: 'miles' }
+      }
+    },
+    'WI': {
+      routeId,
+      state: 'WI',
+      parseResult: {
+        startPoint: { address: 'Milwaukee, WI' },
+        endPoint: { address: 'Madison, WI' },
+        waypoints: [
+          { address: 'Waukesha, WI' }
+        ],
+        restrictions: [],
+        distance: { value: 80, unit: 'miles' }
+      }
+    },
+    'MO': {
+      routeId,
+      state: 'MO',
+      parseResult: {
+        startPoint: { address: 'St. Louis, MO' },
+        endPoint: { address: 'Kansas City, MO' },
+        waypoints: [
+          { address: 'Columbia, MO' },
+          { address: 'Jefferson City, MO' }
+        ],
+        restrictions: [],
+        distance: { value: 250, unit: 'miles' }
+      }
+    },
+    'ND': {
+      routeId,
+      state: 'ND',
+      parseResult: {
+        startPoint: { address: 'Fargo, ND' },
+        endPoint: { address: 'Bismarck, ND' },
+        waypoints: [
+          { address: 'Jamestown, ND' }
+        ],
+        restrictions: [],
+        distance: { value: 200, unit: 'miles' }
+      }
+    },
+    'IN': {
+      routeId,
+      state: 'IN',
+      parseResult: {
+        startPoint: { address: 'Indianapolis, IN' },
+        endPoint: { address: 'Fort Wayne, IN' },
+        waypoints: [
+          { address: 'Kokomo, IN' }
+        ],
+        restrictions: [],
+        distance: { value: 120, unit: 'miles' }
+      }
+    }
+  };
+  
+  return sampleRoutes[state] || sampleRoutes['IL'];
 }
 
 /**
@@ -130,5 +234,7 @@ async function geocodeAddress(address) {
 module.exports = {
   generateMapsUrl,
   generateMapsUrlById,
-  geocodeAddress
+  geocodeAddress,
+  cacheRouteData,
+  getCachedRouteData
 };

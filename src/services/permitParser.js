@@ -173,7 +173,31 @@ function getDemoTextForState(state) {
   const demoTexts = {
     'IL': 'Route from Chicago, IL to Springfield, IL via Interstate 55 South. Distance: 200 miles. Weight restriction: 80,000 lbs maximum. No travel during rush hours 7-9 AM and 4-6 PM. Permit number: IL-2024-001234.',
     'WI': 'Route from Milwaukee, WI to Madison, WI through Dane County and Milwaukee County via Highway 94 West. Distance: 80 miles. Axle weight limit: 20,000 lbs per axle. Width restriction: 8.5 feet maximum. Permit number: WI-2024-005678.',
-    'MO': 'Route from Kansas City, MO to St. Louis, MO via Interstate 70 East. Distance: 250 miles. Bridge restrictions apply on Missouri River crossings. Height limit: 13.6 feet. No travel on weekends. Permit number: MO-2024-009876.',
+    'MO': `Total Miles: 318
+From: Border Start: Missouri - I-255
+To: Border End: Wisconsin - I-39
+Authorized Route:
+1. Border Start: Missouri - I-255
+2. [state] Go on I-255 (2.3 miles)
+3. [state] At exit 6 take ramp on the right and go on IL-3 S / THE GREAT RIVER ROAD SOUTH toward COLUMBIA (4.3 miles)
+4. [state] Take ramp on the right to IL-158 E toward BELLEVILLE (12.1 miles)
+5. [state] At roundabout, take the third exit to proceed on IL-158 (0.1 miles)
+6. [state] Turn left onto ramp to IL-15 W (7.5 miles)
+7. [state] Take ramp on the right and go on I-255 N / US-50 E toward CHICAGO (13.8 miles)
+8. [state] At exit 30 take ramp on the right to I-270 toward INDIANAPOLIS / KANSAS CITY (7.8 miles)
+9. [state] At exit 15B take ramp on the right and go on I-55 N toward CHICAGO / SPRINGFIELD (73.4 miles)
+10. [state] Go on I-55/ I-72 (4.7 miles)
+11. [state] Go on I-55 (59.9 miles)
+12. [state] Go on I-55/ I-74 (5.6 miles)
+13. [state] Go on I-55 N / US-51 toward I-39 N / CHICAGO / ROCKFORD (0.9 miles)
+14. [state] Take ramp on the right and go on I-39 (119.5 miles)
+15. [state] Take ramp on the right and go on I-39 / US-51 N / US-20 E toward WISCONSIN / ROCKFORD / BELVIDERE (1.0 miles)
+16. [toll] Keep left to proceed on I-90 W / I-39 / US-51 toward WISCONSIN (1.0 miles)
+17. [toll] Bear left on I-39 (14.2 miles)
+18. [state] Go on I-39 (2.5 miles)
+19. Border End: Wisconsin - I-39
+Total Distance: 333.7 miles
+State Mileage: 318.4 miles`,
     'ND': 'Route from Fargo, ND to Bismarck, ND via Highway 94 West through Cass County and Burleigh County. Distance: 200 miles. Seasonal restrictions: No travel during spring thaw March 15 - May 1. Agricultural harvest consideration required. Permit number: ND-2024-004321.',
     'IN': 'Route from Indianapolis, IN to Fort Wayne, IN via Interstate 69 North and Indiana Toll Road. Distance: 150 miles. Toll road restrictions apply. Weight limit: 80,000 lbs gross vehicle weight. Height restriction: 13.6 feet on toll bridges. Permit number: IN-2024-007890.'
   };
