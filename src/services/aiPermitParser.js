@@ -63,12 +63,50 @@ class AIPermitParser {
         parseResult = JSON.parse(content);
       } catch (parseError) {
         logger.error(`Failed to parse AI response as JSON: ${parseError.message}`);
-        // Try to extract JSON from response
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          parseResult = JSON.parse(jsonMatch[0]);
+        logger.info(`Attempting to extract JSON from response...`);
+        
+        // Try to extract JSON from text that may contain explanations
+        // Strategy 1: Remove everything before first { and after last }
+        const firstBrace = content.indexOf('{');
+        const lastBrace = content.lastIndexOf('}');
+        
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const jsonStr = content.substring(firstBrace, lastBrace + 1);
+          try {
+            parseResult = JSON.parse(jsonStr);
+            logger.info(`✅ Successfully extracted JSON by trimming explanatory text`);
+          } catch (e) {
+            // Strategy 2: Try to find complete JSON with balanced braces
+            const braceStack = [];
+            let jsonStart = -1;
+            let jsonEnd = -1;
+            
+            for (let i = 0; i < content.length; i++) {
+              if (content[i] === '{') {
+                if (braceStack.length === 0) jsonStart = i;
+                braceStack.push('{');
+              } else if (content[i] === '}') {
+                braceStack.pop();
+                if (braceStack.length === 0 && jsonStart !== -1) {
+                  jsonEnd = i;
+                  break;
+                }
+              }
+            }
+            
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+              try {
+                parseResult = JSON.parse(content.substring(jsonStart, jsonEnd + 1));
+                logger.info(`✅ Successfully extracted JSON with balanced braces`);
+              } catch (e2) {
+                throw new Error(`AI returned text but no valid JSON could be extracted. Response starts with: ${content.substring(0, 100)}`);
+              }
+            } else {
+              throw new Error(`AI did not return valid JSON. Response: ${content.substring(0, 200)}`);
+            }
+          }
         } else {
-          throw new Error('AI did not return valid JSON');
+          throw new Error(`AI did not return valid JSON. No braces found in response.`);
         }
       }
 
@@ -158,13 +196,18 @@ Return ONLY valid JSON in this exact format:
   "notes": "Any additional relevant information"
 }
 
-IMPORTANT:
-- Return ONLY the JSON object, no markdown code blocks
+CRITICAL REQUIREMENTS:
+- Return ONLY the JSON object - NO explanatory text before or after
+- NO markdown code blocks (no \`\`\`json)
+- NO comments or notes outside the JSON
+- Start your response with { and end with }
 - Include at least 2 waypoints if the route has intermediate stops
 - Use full city names with state codes (e.g., "Richmond, VA" not just "Richmond")
 - For highway-based routes, find the nearest cities to exits/interchanges
 - Set parseAccuracy between 0.0 and 1.0 based on confidence
-- If no clear route is found, return empty waypoints array but still extract start/end if possible`;
+- If no clear route is found, return empty waypoints array but still extract start/end if possible
+
+Your response must start with { and contain only valid JSON.`;
   }
 
   /**

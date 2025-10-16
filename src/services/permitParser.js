@@ -193,88 +193,87 @@ async function parsePermit(filePath, state = null) {
       logger.info('Processing PDF file with FREE AI Vision...');
       
       if (!process.env.OPENROUTER_API_KEY) {
-        logger.warn('OpenRouter API key not found. Using demo text.');
-        extractedText = getDemoTextForState(state);
-      } else {
-        try {
-          // Convert PDF to images first
-          const imagePages = await convertPdfToImages(filePath);
-          logger.info(`Processing ${imagePages.length} PDF pages with AI vision`);
-          
-          // Process each page with AI vision and combine results
-          const ocr = new OpenRouterOCR();
-          const pageTexts = [];
-          
-          for (let i = 0; i < imagePages.length; i++) {
-            logger.info(`Processing page ${i + 1}/${imagePages.length}...`);
-            try {
-              const pageText = await ocr.extractRawText(imagePages[i]);
-              pageTexts.push(pageText);
-              logger.info(`✅ Page ${i + 1}: extracted ${pageText.length} characters`);
-            } catch (pageError) {
-              logger.error(`Failed to process page ${i + 1}: ${pageError.message}`);
-              pageTexts.push(''); // Continue with other pages
+        throw new Error('OpenRouter API key is required for PDF processing. Please set OPENROUTER_API_KEY in docker-compose.yml');
+      }
+      
+      try {
+        // Convert PDF to images first
+        const imagePages = await convertPdfToImages(filePath);
+        logger.info(`Processing ${imagePages.length} PDF pages with AI vision`);
+        
+        // Process each page with AI vision and combine results
+        const ocr = new OpenRouterOCR();
+        const pageTexts = [];
+        let failedPages = 0;
+        
+        for (let i = 0; i < imagePages.length; i++) {
+          logger.info(`Processing page ${i + 1}/${imagePages.length}...`);
+          try {
+            const pageText = await ocr.extractRawText(imagePages[i]);
+            pageTexts.push(pageText);
+            logger.info(`✅ Page ${i + 1}: extracted ${pageText.length} characters`);
+          } catch (pageError) {
+            logger.error(`❌ Failed to process page ${i + 1}: ${pageError.message}`);
+            failedPages++;
+            
+            // If it's a 402 or 404 error, stop processing
+            if (pageError.message.includes('402') || pageError.message.includes('404') || pageError.message.includes('credits')) {
+              // Clean up and throw error
+              const imageDir = path.dirname(imagePages[0]);
+              await fs.remove(imageDir);
+              throw new Error(`Vision OCR failed: ${pageError.message}. Please check your OpenRouter API key and credits.`);
             }
           }
-          
-          // Combine all page texts
-          extractedText = pageTexts.join('\n\n--- PAGE BREAK ---\n\n');
-          
-          // Clean up temporary image files
-          const imageDir = path.dirname(imagePages[0]);
-          await fs.remove(imageDir);
-          logger.info('✅ Cleaned up temporary PDF images');
-          
-          if (!extractedText || extractedText.trim().length === 0) {
-            logger.warn('No text extracted from PDF images, using demo text');
-            extractedText = getDemoTextForState(state);
-          }
-          
-        } catch (pdfError) {
-          logger.error(`PDF vision processing failed: ${pdfError.message}`);
-          logger.warn('Falling back to demo text');
-          extractedText = getDemoTextForState(state);
         }
+        
+        // Clean up temporary image files
+        const imageDir = path.dirname(imagePages[0]);
+        await fs.remove(imageDir);
+        logger.info('✅ Cleaned up temporary PDF images');
+        
+        // Combine all page texts
+        extractedText = pageTexts.join('\n\n--- PAGE BREAK ---\n\n');
+        
+        // Check if we extracted meaningful text
+        if (!extractedText || extractedText.trim().length < 50) {
+          throw new Error(`Failed to extract text from PDF. Only ${extractedText.trim().length} characters extracted from ${imagePages.length} pages. ${failedPages} pages failed. The PDF may be corrupted or the AI vision service is unavailable.`);
+        }
+        
+        logger.info(`✅ Successfully extracted ${extractedText.length} characters from ${imagePages.length} pages (${failedPages} failed)`);
+        
+      } catch (pdfError) {
+        logger.error(`❌ PDF vision processing failed: ${pdfError.message}`);
+        throw new Error(`Unable to process PDF: ${pdfError.message}`);
       }
     } else if (isImageFile(filePath)) {
       logger.info('Processing image file with OpenRouter OCR...');
       
-      // Use OpenRouter OCR with fallback to demo text
       if (!process.env.OPENROUTER_API_KEY) {
-        logger.warn('OpenRouter API key not found. Using demo text for parsing demonstration.');
-        extractedText = getDemoTextForState(state);
-      } else {
-        try {
-          const ocr = new OpenRouterOCR();
-          const templatePath = path.join(__dirname, '../../outputs/permit-template-IL.png');
-          
-          // Use OpenRouter for intelligent text extraction
-          const result = await ocr.processPermit(filePath, templatePath);
-          
-          // Try to get text from rawText first, then from extracted fields
-          extractedText = result.extractedData.rawText;
-          
-          if (!extractedText || extractedText.trim().length === 0) {
-            // If no rawText, try to combine extracted fields
-            const fieldValues = Object.values(result.extractedData.extractedFields).filter(v => v && v.trim());
-            extractedText = fieldValues.join(' ');
-          }
-          
-          // If still no text, use a fallback approach
-          if (!extractedText || extractedText.trim().length === 0) {
-            logger.warn('No text extracted via structured approach, requesting raw OCR');
-            // Make a simple OCR request for raw text
-            const simpleOcr = new OpenRouterOCR();
-            const rawOcrResult = await simpleOcr.extractRawText(filePath);
-            extractedText = rawOcrResult;
-          }
-          
-          logger.info(`OpenRouter OCR completed with confidence: ${result.extractedData.confidence}`);
-        } catch (ocrError) {
-          logger.error(`OpenRouter OCR failed: ${ocrError.message}`);
-          logger.warn('Falling back to demo text for parsing demonstration.');
-          extractedText = getDemoTextForState(state);
+        throw new Error('OpenRouter API key is required for image processing. Please set OPENROUTER_API_KEY in docker-compose.yml');
+      }
+      
+      try {
+        const ocr = new OpenRouterOCR();
+        
+        // Use simple raw text extraction for images
+        logger.info('Extracting text from image with AI vision...');
+        extractedText = await ocr.extractRawText(filePath);
+        
+        if (!extractedText || extractedText.trim().length < 50) {
+          throw new Error(`Failed to extract meaningful text from image. Only ${extractedText?.trim().length || 0} characters extracted. The image may be low quality or the AI vision service is unavailable.`);
         }
+        
+        logger.info(`✅ Successfully extracted ${extractedText.length} characters from image`);
+        
+      } catch (ocrError) {
+        logger.error(`❌ Image OCR failed: ${ocrError.message}`);
+        
+        // If it's a 402 or 404 error, provide specific message
+        if (ocrError.message.includes('402') || ocrError.message.includes('404') || ocrError.message.includes('credits')) {
+          throw new Error(`Vision OCR failed: ${ocrError.message}. Please check your OpenRouter API key and credits.`);
+        }
+        
+        throw new Error(`Unable to process image: ${ocrError.message}`);
       }
     } else {
       throw new Error(`Unsupported file format: ${fileExtension}. Supported formats: .pdf, .png, .jpg, .jpeg, .gif, .bmp, .tiff, .webp`);

@@ -455,8 +455,11 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
       
       const prompt = `Extract ALL visible text from this permit image. Return only the raw text without any formatting or structure. Include company names, addresses, numbers, dates, and any other text you can see.`;
 
+      // Use the same model as configured in environment
+      const model = process.env.AI_MODEL || "meta-llama/llama-3.2-11b-vision-instruct:free";
+      
       const response = await axios.post(this.baseUrl, {
-        model: "meta-llama/llama-3.2-11b-vision-instruct:free",
+        model: model,
         messages: [
           {
             role: "user",
