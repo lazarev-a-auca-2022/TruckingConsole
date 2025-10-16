@@ -6,9 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest",
-    "test-images": "node test-images.js",
-    "debug-png": "node debug-png.js",
+    "test": "jest --config tests/jest.config.js",
     "docker:build": "docker build -t trucking-console .",
     "docker:run": "docker run -p 3000:3000 trucking-console",
     "deploy": "docker-compose up --build -d",
@@ -27,11 +25,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "pdf2json": "^3.0.4",
     "pdf-to-png-converter": "^3.3.0",
-    "commander": "^11.0.0",
     "fs-extra": "^11.1.1",
-    "path": "^0.12.7",
     "axios": "^1.5.0",
     "gpx-builder": "^3.0.0",
     "mongodb": "^6.0.0",

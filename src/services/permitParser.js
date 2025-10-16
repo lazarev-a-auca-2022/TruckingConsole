@@ -1,115 +1,12 @@
 const fs = require('fs-extra');
-const PDFParser = require('pdf2json');
 const { pdfToPng } = require('pdf-to-png-converter');
 const path = require('path');
 const logger = require('../utils/logger');
 const OpenRouterOCR = require('./openRouterOcr');
 const AIPermitParser = require('./aiPermitParser');
-const { parseIllinois } = require('../parsers/illinoisParser');
-const { parseWisconsin } = require('../parsers/wisconsinParser');
-const { parseMissouri } = require('../parsers/missouriParser');
-const { parseNorthDakota } = require('../parsers/northDakotaParser');
-const { parseIndiana } = require('../parsers/indianaParser');
-const { parseVirginia } = require('../parsers/virginiaParser');
-const { parseTexasPermit } = require('../parsers/texasParser');
 
-const STATE_PARSERS = {
-  'IL': parseIllinois,
-  'WI': parseWisconsin,
-  'MO': parseMissouri,
-  'ND': parseNorthDakota,
-  'IN': parseIndiana,
-  'VA': parseVirginia,
-  'TX': async (text) => {
-    // Texas parser returns array of waypoints, convert to parseResult format
-    const waypoints = parseTexasPermit(text);
-    if (!waypoints || waypoints.length < 2) {
-      return {
-        startPoint: null,
-        endPoint: null,
-        waypoints: [],
-        restrictions: [],
-        distance: null,
-        parseAccuracy: 0.2
-      };
-    }
-    return {
-      startPoint: { address: waypoints[0], description: 'Start point' },
-      endPoint: { address: waypoints[waypoints.length - 1], description: 'End point' },
-      waypoints: waypoints.slice(1, -1).map(wp => ({ address: wp, description: 'Waypoint' })),
-      restrictions: [],
-      distance: null,
-      parseAccuracy: 0.9
-    };
-  }
-};
-
-async function extractTextFromPdf(filePath) {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
-    
-    pdfParser.on('pdfParser_dataError', (errData) => {
-      const errorMsg = errData.parserError?.toString() || errData.toString();
-      logger.error(`PDF parsing failed: ${errorMsg}`);
-      
-      // Check for common PDF issues and provide helpful messages
-      if (errorMsg.includes('unsupported encryption') || errorMsg.includes('encryption')) {
-        reject(new Error('PDF is password protected or encrypted. Please provide an unencrypted version or convert to image format (PNG/JPG).'));
-      } else if (errorMsg.includes('Invalid PDF') || errorMsg.includes('corrupted')) {
-        reject(new Error('PDF file appears to be corrupted. Please try re-saving the PDF or convert to image format.'));
-      } else {
-        reject(new Error(`PDF parsing error: ${errorMsg}. Try converting the PDF to PNG or JPG format.`));
-      }
-    });
-    
-    pdfParser.on('pdfParser_dataReady', (pdfData) => {
-      try {
-        let text = '';
-        
-        if (pdfData.Pages) {
-          pdfData.Pages.forEach(page => {
-            if (page.Texts) {
-              page.Texts.forEach(textItem => {
-                if (textItem.R) {
-                  textItem.R.forEach(run => {
-                    if (run.T) {
-                      text += decodeURIComponent(run.T) + ' ';
-                    }
-                  });
-                }
-              });
-            }
-          });
-        }
-        
-        if (!text || text.trim().length === 0) {
-          reject(new Error('No text found in PDF. The PDF might be image-based or encrypted. Please convert to PNG/JPG format.'));
-          return;
-        }
-        
-        resolve(text.trim());
-      } catch (error) {
-        reject(new Error(`Text extraction error: ${error.message}. Try converting the PDF to image format.`));
-      }
-    });
-    
-    // Add timeout to prevent hanging
-    const timeout = setTimeout(() => {
-      reject(new Error('PDF parsing timeout. Please try converting to PNG/JPG format.'));
-    }, 30000); // 30 second timeout
-    
-    try {
-      pdfParser.loadPDF(filePath);
-    } catch (error) {
-      clearTimeout(timeout);
-      reject(new Error(`Failed to load PDF: ${error.message}. Try converting to PNG/JPG format.`));
-    }
-    
-    // Clear timeout when parsing completes
-    pdfParser.on('pdfParser_dataReady', () => clearTimeout(timeout));
-    pdfParser.on('pdfParser_dataError', () => clearTimeout(timeout));
-  });
-}
+// Supported states for AI parsing
+const SUPPORTED_STATES = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX'];
 
 /**
  * Convert PDF to PNG images using FREE vision AI
@@ -181,8 +78,8 @@ async function parsePermit(filePath, state = null) {
     }
     
     // Validate state
-    if (!STATE_PARSERS[state]) {
-      throw new Error(`Unsupported state: ${state}. Supported states: ${Object.keys(STATE_PARSERS).join(', ')}`);
+    if (!SUPPORTED_STATES.includes(state)) {
+      throw new Error(`Unsupported state: ${state}. Supported states: ${SUPPORTED_STATES.join(', ')}`);
     }
     
     let extractedText;
@@ -285,31 +182,24 @@ async function parsePermit(filePath, state = null) {
     
     logger.info(`Extracted ${extractedText.length} characters from ${fileExtension.substring(1).toUpperCase()}`);
     
-    // Try AI parsing first if OpenRouter API key is available
-    let parseResult;
-    if (process.env.OPENROUTER_API_KEY && process.env.USE_AI_PARSER !== 'false') {
-      try {
-        logger.info('Using FREE AI-powered parsing (Llama 3.2 90B Vision)...');
-        const aiParser = new AIPermitParser();
-        parseResult = await aiParser.parsePermit(extractedText, state);
-        
-        // If AI parsing failed or has low confidence, fall back to manual parser
-        if (!parseResult || parseResult.parseAccuracy < 0.3) {
-          logger.warn(`AI parsing had low confidence (${parseResult?.parseAccuracy}), falling back to manual parser`);
-          const parser = STATE_PARSERS[state];
-          parseResult = await parser(extractedText);
-        } else {
-          logger.info(`✅ AI parsing successful with ${parseResult.parseAccuracy * 100}% confidence`);
-        }
-      } catch (aiError) {
-        logger.error(`AI parsing failed: ${aiError.message}, falling back to manual parser`);
-        const parser = STATE_PARSERS[state];
-        parseResult = await parser(extractedText);
-      }
+    // Use AI parsing (required - no fallback to manual parsers)
+    if (!process.env.OPENROUTER_API_KEY) {
+      throw new Error('OpenRouter API key is required. Please set OPENROUTER_API_KEY in docker-compose.yml');
+    }
+    
+    if (process.env.USE_AI_PARSER === 'false') {
+      throw new Error('AI parsing is disabled but manual parsers have been removed. Set USE_AI_PARSER=true');
+    }
+    
+    logger.info('Using AI-powered parsing...');
+    const aiParser = new AIPermitParser();
+    const parseResult = await aiParser.parsePermit(extractedText, state);
+    
+    if (!parseResult || parseResult.waypoints.length === 0) {
+      logger.warn(`⚠️  AI parsing returned no waypoints. Parse accuracy: ${parseResult?.parseAccuracy || 0}`);
     } else {
-      logger.info('Using manual state-specific parser...');
-      const parser = STATE_PARSERS[state];
-      parseResult = await parser(extractedText);
+      logger.info(`✅ AI parsing successful with ${parseResult.parseAccuracy * 100}% confidence`);
+      logger.info(`   Extracted ${parseResult.waypoints.length} waypoints`);
     }
     
     // Generate unique route ID
@@ -351,48 +241,9 @@ function isImageFile(filePath) {
 /**
  * Get demo text for state-specific parsing demonstration
  */
-function getDemoTextForState(state) {
-  const demoTexts = {
-    'IL': 'Route from Chicago, IL to Springfield, IL via Interstate 55 South. Distance: 200 miles. Weight restriction: 80,000 lbs maximum. No travel during rush hours 7-9 AM and 4-6 PM. Permit number: IL-2024-001234.',
-    'WI': 'Route from Milwaukee, WI to Madison, WI through Dane County and Milwaukee County via Highway 94 West. Distance: 80 miles. Axle weight limit: 20,000 lbs per axle. Width restriction: 8.5 feet maximum. Permit number: WI-2024-005678.',
-    'MO': `Total Miles: 318
-From: Border Start: Missouri - I-255
-To: Border End: Wisconsin - I-39
-Authorized Route:
-1. Border Start: Missouri - I-255
-2. [state] Go on I-255 (2.3 miles)
-3. [state] At exit 6 take ramp on the right and go on IL-3 S / THE GREAT RIVER ROAD SOUTH toward COLUMBIA (4.3 miles)
-4. [state] Take ramp on the right to IL-158 E toward BELLEVILLE (12.1 miles)
-5. [state] At roundabout, take the third exit to proceed on IL-158 (0.1 miles)
-6. [state] Turn left onto ramp to IL-15 W (7.5 miles)
-7. [state] Take ramp on the right and go on I-255 N / US-50 E toward CHICAGO (13.8 miles)
-8. [state] At exit 30 take ramp on the right to I-270 toward INDIANAPOLIS / KANSAS CITY (7.8 miles)
-9. [state] At exit 15B take ramp on the right and go on I-55 N toward CHICAGO / SPRINGFIELD (73.4 miles)
-10. [state] Go on I-55/ I-72 (4.7 miles)
-11. [state] Go on I-55 (59.9 miles)
-12. [state] Go on I-55/ I-74 (5.6 miles)
-13. [state] Go on I-55 N / US-51 toward I-39 N / CHICAGO / ROCKFORD (0.9 miles)
-14. [state] Take ramp on the right and go on I-39 (119.5 miles)
-15. [state] Take ramp on the right and go on I-39 / US-51 N / US-20 E toward WISCONSIN / ROCKFORD / BELVIDERE (1.0 miles)
-16. [toll] Keep left to proceed on I-90 W / I-39 / US-51 toward WISCONSIN (1.0 miles)
-17. [toll] Bear left on I-39 (14.2 miles)
-18. [state] Go on I-39 (2.5 miles)
-19. Border End: Wisconsin - I-39
-Total Distance: 333.7 miles
-State Mileage: 318.4 miles`,
-    'ND': 'Route from Fargo, ND to Bismarck, ND via Highway 94 West through Cass County and Burleigh County. Distance: 200 miles. Seasonal restrictions: No travel during spring thaw March 15 - May 1. Agricultural harvest consideration required. Permit number: ND-2024-004321.',
-    'IN': 'Route from Indianapolis, IN to Fort Wayne, IN via Interstate 69 North and Indiana Toll Road. Distance: 150 miles. Toll road restrictions apply. Weight limit: 80,000 lbs gross vehicle weight. Height restriction: 13.6 feet on toll bridges. Permit number: IN-2024-007890.',
-    'VA': 'Route from Richmond, VA to Norfolk, VA via Interstate 64 East through Petersburg, VA and Suffolk, VA. Distance: 90 miles. Weight limit: 80,000 lbs gross vehicle weight. Height restriction: 13.6 feet. Width restriction: 8.5 feet. No travel during peak hours. Permit number: VA-2024-012345.'
-  };
-  
-  return demoTexts[state] || demoTexts['IL'];
-}
-
 module.exports = {
   parsePermit,
-  extractTextFromPdf,
   convertPdfToImages,
   generateRouteId,
-  isImageFile,
-  getDemoTextForState
+  isImageFile
 };

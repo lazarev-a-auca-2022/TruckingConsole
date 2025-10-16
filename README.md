@@ -54,18 +54,6 @@ npm run docker:run
 
 ### Web Interface
 
-### Available Free Models
-
-**Note:** "Free" models don't charge per-token, but you still need an OpenRouter account with credits ($5+ minimum).
-
-| Model | Speed | Accuracy | Best For |
-|-------|-------|----------|----------|
-| `meta-llama/llama-3.2-11b-vision-instruct:free` | Fast (3-5s) | 85-90% | High volume |
-| `meta-llama/llama-3.2-90b-vision-instruct:free` | Slow (10-15s) | 95%+ | Complex PDFs ⭐ |
-| `google/gemini-flash-1.5-8b` | Medium (5-8s) | 90-95% | Balanced |
-
-Free models = $0 per request, but account must have credits loaded.
-
 ## How It Works
 
 ```
@@ -134,14 +122,19 @@ docker exec $(docker ps -q -f name=app) which convert
 ```
 src/
 ├── services/
-│   ├── aiPermitParser.js      # AI vision parsing
-│   ├── permitParser.js         # PDF→Image + routing
-│   ├── openRouterOcr.js        # Vision API calls
-│   └── mapsService.js          # Google Maps integration
-├── parsers/
-│   └── [state]Parser.js        # Fallback regex parsers
-└── models/
-    └── Route.js                # MongoDB schema
+│   ├── aiPermitParser.js      # AI vision parsing (LLM-powered)
+│   ├── permitParser.js         # PDF→Image conversion + routing
+│   ├── openRouterOcr.js        # Vision OCR API calls
+│   ├── mapsService.js          # Google Maps integration
+│   └── gpxService.js           # GPX file generation
+├── models/
+│   └── Route.js                # MongoDB schema
+├── utils/
+│   └── logger.js               # Winston logger
+└── config/
+    └── database.js             # MongoDB connection
+tests/
+└── *.test.js                   # Jest tests
 ```
 
 ## License
