@@ -8,7 +8,7 @@ services:
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongo:27017/trucking_permits
-      - OPENROUTER_API_KEY=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
+      - OPENROUTER_API_KEY=PUT_KEY_HERE
       - USE_AI_PARSER=true
       - AI_MODEL=meta-llama/llama-3.2-90b-vision-instruct:free
     depends_on:
