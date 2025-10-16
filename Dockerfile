@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 
-# Install system dependencies for canvas and sharp
+# Install system dependencies for canvas and sharp + ImageMagick for PDF conversion
 RUN apk add --no-cache \
     python3 \
     make \
@@ -17,7 +17,9 @@ RUN apk add --no-cache \
     cairo-dev \
     pango-dev \
     jpeg-dev \
-    giflib-dev
+    giflib-dev \
+    imagemagick \
+    ghostscript
 
 # Install Node.js dependencies
 RUN npm install --only=production

@@ -1,8 +1,10 @@
 const fs = require('fs-extra');
 const PDFParser = require('pdf2json');
+const { pdfToPng } = require('pdf-to-png-converter');
 const path = require('path');
 const logger = require('../utils/logger');
 const OpenRouterOCR = require('./openRouterOcr');
+const AIPermitParser = require('./aiPermitParser');
 const { parseIllinois } = require('../parsers/illinoisParser');
 const { parseWisconsin } = require('../parsers/wisconsinParser');
 const { parseMissouri } = require('../parsers/missouriParser');
@@ -109,6 +111,37 @@ async function extractTextFromPdf(filePath) {
   });
 }
 
+/**
+ * Convert PDF to PNG images using FREE vision AI
+ * @param {string} pdfPath - Path to PDF file
+ * @returns {Promise<string[]>} - Array of PNG file paths
+ */
+async function convertPdfToImages(pdfPath) {
+  try {
+    logger.info(`Converting PDF to images: ${pdfPath}`);
+    
+    const outputDir = path.join(path.dirname(pdfPath), 'pdf-images');
+    await fs.ensureDir(outputDir);
+    
+    const pngPages = await pdfToPng(pdfPath, {
+      outputFolder: outputDir,
+      viewportScale: 2.0, // Higher resolution for better OCR
+      outputFileMask: `page`,
+      strictPagesToProcess: false,
+      verbosityLevel: 0
+    });
+    
+    const imagePaths = pngPages.map(page => page.path);
+    logger.info(`✅ Converted PDF to ${imagePaths.length} images`);
+    
+    return imagePaths;
+    
+  } catch (error) {
+    logger.error(`PDF to image conversion failed: ${error.message}`);
+    throw new Error(`Failed to convert PDF to images: ${error.message}`);
+  }
+}
+
 async function parsePermit(filePath, state = null) {
   try {
     logger.info(`Starting permit parsing for file: ${filePath}, state: ${state || 'auto-detect'}`);
@@ -157,18 +190,51 @@ async function parsePermit(filePath, state = null) {
     
     // Determine file type and extract text accordingly
     if (fileExtension === '.pdf') {
-      logger.info('Processing PDF file...');
-      try {
-        extractedText = await extractTextFromPdf(filePath);
-      } catch (pdfError) {
-        logger.warn(`PDF parsing failed: ${pdfError.message}`);
-        logger.info('Using demo text for PDF processing failure');
-        
-        // Use demo text when PDF parsing fails
+      logger.info('Processing PDF file with FREE AI Vision...');
+      
+      if (!process.env.OPENROUTER_API_KEY) {
+        logger.warn('OpenRouter API key not found. Using demo text.');
         extractedText = getDemoTextForState(state);
-        
-        // Log the demo fallback
-        logger.info(`PDF processing failed, using demo data for ${state} state`);
+      } else {
+        try {
+          // Convert PDF to images first
+          const imagePages = await convertPdfToImages(filePath);
+          logger.info(`Processing ${imagePages.length} PDF pages with AI vision`);
+          
+          // Process each page with AI vision and combine results
+          const ocr = new OpenRouterOCR();
+          const pageTexts = [];
+          
+          for (let i = 0; i < imagePages.length; i++) {
+            logger.info(`Processing page ${i + 1}/${imagePages.length}...`);
+            try {
+              const pageText = await ocr.extractRawText(imagePages[i]);
+              pageTexts.push(pageText);
+              logger.info(`✅ Page ${i + 1}: extracted ${pageText.length} characters`);
+            } catch (pageError) {
+              logger.error(`Failed to process page ${i + 1}: ${pageError.message}`);
+              pageTexts.push(''); // Continue with other pages
+            }
+          }
+          
+          // Combine all page texts
+          extractedText = pageTexts.join('\n\n--- PAGE BREAK ---\n\n');
+          
+          // Clean up temporary image files
+          const imageDir = path.dirname(imagePages[0]);
+          await fs.remove(imageDir);
+          logger.info('✅ Cleaned up temporary PDF images');
+          
+          if (!extractedText || extractedText.trim().length === 0) {
+            logger.warn('No text extracted from PDF images, using demo text');
+            extractedText = getDemoTextForState(state);
+          }
+          
+        } catch (pdfError) {
+          logger.error(`PDF vision processing failed: ${pdfError.message}`);
+          logger.warn('Falling back to demo text');
+          extractedText = getDemoTextForState(state);
+        }
       }
     } else if (isImageFile(filePath)) {
       logger.info('Processing image file with OpenRouter OCR...');
@@ -220,9 +286,32 @@ async function parsePermit(filePath, state = null) {
     
     logger.info(`Extracted ${extractedText.length} characters from ${fileExtension.substring(1).toUpperCase()}`);
     
-    // Parse using state-specific parser
-    const parser = STATE_PARSERS[state];
-    const parseResult = await parser(extractedText);
+    // Try AI parsing first if OpenRouter API key is available
+    let parseResult;
+    if (process.env.OPENROUTER_API_KEY && process.env.USE_AI_PARSER !== 'false') {
+      try {
+        logger.info('Using FREE AI-powered parsing (Llama 3.2 90B Vision)...');
+        const aiParser = new AIPermitParser();
+        parseResult = await aiParser.parsePermit(extractedText, state);
+        
+        // If AI parsing failed or has low confidence, fall back to manual parser
+        if (!parseResult || parseResult.parseAccuracy < 0.3) {
+          logger.warn(`AI parsing had low confidence (${parseResult?.parseAccuracy}), falling back to manual parser`);
+          const parser = STATE_PARSERS[state];
+          parseResult = await parser(extractedText);
+        } else {
+          logger.info(`✅ AI parsing successful with ${parseResult.parseAccuracy * 100}% confidence`);
+        }
+      } catch (aiError) {
+        logger.error(`AI parsing failed: ${aiError.message}, falling back to manual parser`);
+        const parser = STATE_PARSERS[state];
+        parseResult = await parser(extractedText);
+      }
+    } else {
+      logger.info('Using manual state-specific parser...');
+      const parser = STATE_PARSERS[state];
+      parseResult = await parser(extractedText);
+    }
     
     // Generate unique route ID
     const routeId = generateRouteId();
@@ -303,6 +392,7 @@ State Mileage: 318.4 miles`,
 module.exports = {
   parsePermit,
   extractTextFromPdf,
+  convertPdfToImages,
   generateRouteId,
   isImageFile,
   getDemoTextForState

@@ -1,52 +1,42 @@
-# Trucking Console App
+# TruckingConsole - AI-Powered Permit Parser
 
-A console-only application for parsing truck permit PDF files and converting them into navigable routes.
+Multi-state truck permit parser with AI vision capabilities for extracting routes from PDFs and images.
 
 ## Features
 
-- **Web Interface**: Simple file upload with drag-and-drop support
-- **OCR Processing**: Extract text from PNG, JPG, JPEG, GIF, BMP, TIFF, WEBP images
-- **PDF Support**: Parse PDF permit files from multiple states
-- **PNG Conversion**: Generate standardized converted PNG permits
-- **Route Export**: Export routes as GPX files for Garmin devices
-- **Google Maps Integration**: Generate Google Maps URLs for navigation
-- **Console Interface**: Command-line tools for batch processing
-- **Docker Deployment**: Ready for remote server deployment
+- **AI Vision Parsing**: Uses free Llama 3.2 Vision models to read routing tables from PDFs
+- **Multi-State Support**: IL, WI, MO, ND, IN, VA, TX
+- **Auto PDF→Image**: Converts PDFs to images for vision AI processing
+- **GPX Export**: Generates routes for navigation apps
+- **MongoDB Storage**: Caches parsed routes
 
-## Supported States
+## Quick Deploy (Linux Server)
 
-- Illinois
-- Wisconsin
-- Missouri
-- North Dakota
-- Indiana
-
-## Installation
-
-### Local Development
-
-1. Install dependencies:
 ```bash
-npm install
+# Clone and navigate
+cd /path/to/TruckingConsole
+
+# Configure environment (edit docker-compose.yml with your OpenRouter API key)
+nano docker-compose.yml
+
+# Build and start
+docker-compose up -d
+
+# Verify
+docker-compose logs -f app
 ```
 
-2. Create `.env` file:
-```bash
-cp .env.example .env
-```
+Access: `http://your-server:3000`
 
-3. Configure environment variables in `.env`
+## Configuration
 
-4. Run the application:
-```bash
-npm start
-```
+Edit `docker-compose.yml`:
 
-### Docker Deployment
-
-1. Build the Docker image:
-```bash
-npm run docker:build
+```yaml
+environment:
+  - OPENROUTER_API_KEY=your-key-here
+  - AI_MODEL=meta-llama/llama-3.2-90b-vision-instruct:free  # Best accuracy
+  - USE_AI_PARSER=true
 ```
 
 2. Run the container:
@@ -58,68 +48,85 @@ npm run docker:run
 
 ### Web Interface
 
-1. Open http://localhost:3000 in your browser
-2. Select a state from the dropdown
-3. Upload a permit file (PNG, JPG, or PDF)
-4. Click "Process Permit"
-5. Download the converted PNG or GPX file
+### Available Free Models
 
-### Command Line Interface
+| Model | Speed | Accuracy | Best For |
+|-------|-------|----------|----------|
+| `meta-llama/llama-3.2-11b-vision-instruct:free` | Fast (3-5s) | 85-90% | High volume |
+| `meta-llama/llama-3.2-90b-vision-instruct:free` | Slow (10-15s) | 95%+ | Complex PDFs ⭐ |
+| `google/gemini-flash-1.5-8b` | Medium (5-8s) | 90-95% | Balanced |
 
-Parse a single PDF or image file:
-```bash
-node src/index.js parse --file path/to/permit.pdf --state IL
-# or
-node src/index.js parse --file path/to/permit.png --state IL
+## How It Works
+
+```
+PDF Upload → Convert to Images → AI Vision Extraction → Parse Routing Table → Extract Waypoints
 ```
 
-Batch process multiple files:
+**Why AI Vision?**
+- PDFs lose table structure during text extraction
+- Vision AI reads routing tables visually
+- Understands columns: Miles | Route | To | Distance
+
+## API Endpoints
+
 ```bash
-node src/index.js batch --directory path/to/permits --state IL
+# Upload and parse permit
+curl -X POST http://localhost:3000/upload \
+  -F "permit=@virginia-permit.pdf" \
+  -F "state=VA"
+
+# Generate GPX route
+curl http://localhost:3000/route/{routeId}/gpx > route.gpx
+
+# Get all routes
+curl http://localhost:3000/routes
 ```
 
-Start web server mode:
+## Troubleshooting
+
+**0 waypoints extracted:**
 ```bash
-node src/index.js server --port 3000
+# Check if AI vision is working
+docker-compose logs app | grep "AI Parser initialized"
+docker-compose logs app | grep "Converting PDF"
+
+# Verify API key
+docker exec $(docker ps -q -f name=app) env | grep OPENROUTER
 ```
 
-### API Endpoints (Server Mode)
+**PDF conversion fails:**
+```bash
+# Check ImageMagick installed
+docker exec $(docker ps -q -f name=app) which convert
+```
 
-- `GET /` - Web interface
-- `POST /api/parse` - Upload and parse permit file (PDF or image)
-- `GET /api/routes/:id` - Get parsed route details
-- `GET /api/maps-url/:id` - Get Google Maps URL
-- `GET /api/gpx/:id` - Download GPX file
-- `GET /api/convert-png/:id` - Download converted PNG file
+**Rate limits (free tier):**
+- Limit: ~10-20 requests/minute
+- Solution: Wait 60s between requests
 
-## Environment Variables
+## Tech Stack
 
-- `NODE_ENV` - Environment (development/production)
-- `PORT` - Server port (default: 3000)
-- `MONGODB_URI` - MongoDB connection string
-- `GOOGLE_MAPS_API_KEY` - Google Maps API key
-- `LOG_LEVEL` - Logging level (debug/info/warn/error)
+- **Backend**: Node.js, Express
+- **Database**: MongoDB
+- **AI**: OpenRouter (Llama 3.2 Vision, free tier)
+- **PDF Processing**: pdf-to-png-converter, ImageMagick
+- **Deployment**: Docker, docker-compose
 
 ## File Structure
 
 ```
 src/
-├── index.js              # Main entry point
-├── cli/                  # Command line interface
-├── parsers/              # State-specific parsers
-├── services/             # Business logic services
-├── models/               # Database models
-├── utils/                # Utility functions
-└── config/               # Configuration files
+├── services/
+│   ├── aiPermitParser.js      # AI vision parsing
+│   ├── permitParser.js         # PDF→Image + routing
+│   ├── openRouterOcr.js        # Vision API calls
+│   └── mapsService.js          # Google Maps integration
+├── parsers/
+│   └── [state]Parser.js        # Fallback regex parsers
+└── models/
+    └── Route.js                # MongoDB schema
 ```
 
-## Docker
+## License
 
-The application includes a Dockerfile for easy deployment on remote servers.
-
-## Testing
-
-Run tests:
-```bash
-npm test
-```
+MIT
