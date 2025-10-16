@@ -155,58 +155,75 @@ Analyze the following ${state} state truck permit text and extract ALL routing w
 PERMIT TEXT:
 ${permitText}
 
-INSTRUCTIONS:
+CRITICAL INSTRUCTIONS FOR GOOGLE MAPS COMPATIBILITY:
 1. Find the routing section (may be labeled as "Route", "Routing", "Authorized Route", "Routing and Special Instructions", etc.)
 2. Extract EVERY location mentioned in the route in order
-3. Look for:
-   - City names with state abbreviations
-   - Highway exits (e.g., "Take Exit 56", "Exit 221")
-   - Highway interchanges (e.g., "I-64", "US-50")
-   - Landmarks or geographic references
-   - Origin and destination points
-4. Convert exits and interchanges to nearby cities when possible
-5. Ensure waypoints are in travel order from start to end
-6. Look for tables with columns like "Miles", "Route", "To", "Distance"
+3. **IMPORTANT**: Convert ALL highway references to actual city names:
+   - "I-35 S @ KS State Line" → "Kansas City, KS" or nearest city
+   - "I-64 Exit 56" → Find the nearest city to that exit
+   - "US-50 @ Highway 177" → Name the nearest town/city
+   - State borders → Use the border city name (e.g., "Kansas City, KS" for KS/MO border)
+4. Use FULL addresses that Google Maps can find:
+   - ✅ GOOD: "156 N 29th St, Blackwell, OK 74631"
+   - ✅ GOOD: "Oklahoma City, OK"
+   - ❌ BAD: "I-35 S @ KS State Line" (Google can't find this)
+   - ❌ BAD: "Exit 222" (Google can't find this)
+5. For routing tables, extract the "To" column city names, NOT the highway numbers
+6. Ensure waypoints are in travel order from start to end
 7. Extract restrictions (weight limits, time restrictions, etc.)
 8. Calculate or extract total distance if mentioned
 
 Return ONLY valid JSON in this exact format:
 {
   "startPoint": {
-    "address": "City, STATE or Highway location",
-    "description": "Origin description from permit"
+    "address": "Kansas City, KS",
+    "description": "Starting at KS state line on I-35"
   },
   "endPoint": {
-    "address": "City, STATE or Highway location",  
-    "description": "Destination description from permit"
+    "address": "Blackwell, OK 74631",
+    "description": "Destination in Oklahoma"
   },
   "waypoints": [
     {
-      "address": "City, STATE or Highway location",
-      "description": "Route instruction or landmark"
+      "address": "Wichita, KS",
+      "description": "Via I-35 South"
+    },
+    {
+      "address": "Oklahoma City, OK",
+      "description": "Continue on I-35"
     }
   ],
   "restrictions": [
-    "Weight restriction: XX,XXX lbs",
-    "Time restriction: description",
-    "Height restriction: XX feet"
+    "Weight restriction: 80,000 lbs",
+    "Time restriction: No travel during rush hours"
   ],
-  "distance": "XXX miles or null",
+  "distance": "318 miles",
   "parseAccuracy": 0.95,
-  "notes": "Any additional relevant information"
+  "notes": "Route follows I-35 corridor"
 }
+
+EXAMPLE CONVERSIONS (what you MUST do):
+- "I-35 S @ KS State Line" → "Kansas City, KS" (border city)
+- "Exit 222 Campgrounds" → "Wichita, KS" (city near exit)
+- "OK-11 & W Doolin Ave" → "Blackwell, OK" (actual city)
+- "N 29th St (Snow Rd)" → "Blackwell, OK" (include city name)
 
 CRITICAL REQUIREMENTS:
 - Return ONLY the JSON object - NO explanatory text before or after
 - NO markdown code blocks (no \`\`\`json)
 - NO comments or notes outside the JSON
 - Start your response with { and end with }
-- Include at least 2 waypoints if the route has intermediate stops
+- **NEVER use highway names alone** - ALWAYS include city names
+- **EVERY address must be findable on Google Maps**
 - Use full city names with state codes (e.g., "Richmond, VA" not just "Richmond")
-- For highway-based routes, find the nearest cities to exits/interchanges
+- For state borders, use the border city name (not "@ state line")
+- For exits, research the nearest city and use that city name
+- For street addresses, include city and state
+- Include at least 2 waypoints if the route has intermediate stops
 - Set parseAccuracy between 0.0 and 1.0 based on confidence
 - If no clear route is found, return empty waypoints array but still extract start/end if possible
 
+**REMEMBER**: Google Maps cannot find "I-35 @ KS State Line" but CAN find "Kansas City, KS"
 Your response must start with { and contain only valid JSON.`;
   }
 
