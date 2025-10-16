@@ -42,8 +42,8 @@ class AIPermitParser {
           }
         ],
         max_tokens: 2000,
-        temperature: 0.1, // Low temperature for consistent structured output
-        response_format: { type: 'json_object' } // Request JSON response
+        temperature: 0.1 // Low temperature for consistent structured output
+        // Note: response_format not supported by free models
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -85,6 +85,12 @@ class AIPermitParser {
       if (error.response) {
         logger.error(`Response status: ${error.response.status}`);
         logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+        
+        // Specific handling for 402 Payment Required
+        if (error.response.status === 402) {
+          logger.error('⚠️  OpenRouter API key has no credits!');
+          logger.error('Please add credits at: https://openrouter.ai/credits');
+        }
       }
       
       // Return empty result on failure

@@ -456,7 +456,7 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
       const prompt = `Extract ALL visible text from this permit image. Return only the raw text without any formatting or structure. Include company names, addresses, numbers, dates, and any other text you can see.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "openai/gpt-4o-mini",
+        model: "meta-llama/llama-3.2-11b-vision-instruct:free",
         messages: [
           {
             role: "user",
@@ -492,6 +492,13 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
 
     } catch (error) {
       logger.error(`Raw text extraction failed: ${error.message}`);
+      
+      // If 402 error, provide helpful message
+      if (error.response?.status === 402) {
+        logger.error('OpenRouter API key has no credits. Please add credits or use a valid API key.');
+        throw new Error('API credits required. Please add credits to your OpenRouter account.');
+      }
+      
       throw error;
     }
   }

@@ -30,11 +30,17 @@ Access: `http://your-server:3000`
 
 ## Configuration
 
+**Important:** You need an OpenRouter API key with credits, even for free models.
+
+1. Sign up at https://openrouter.ai
+2. Add credits ($5 minimum): https://openrouter.ai/credits
+3. Get your API key: https://openrouter.ai/keys
+
 Edit `docker-compose.yml`:
 
 ```yaml
 environment:
-  - OPENROUTER_API_KEY=your-key-here
+  - OPENROUTER_API_KEY=sk-or-v1-your-key-here  # Replace with your key
   - AI_MODEL=meta-llama/llama-3.2-90b-vision-instruct:free  # Best accuracy
   - USE_AI_PARSER=true
 ```
@@ -50,11 +56,15 @@ npm run docker:run
 
 ### Available Free Models
 
+**Note:** "Free" models don't charge per-token, but you still need an OpenRouter account with credits ($5+ minimum).
+
 | Model | Speed | Accuracy | Best For |
 |-------|-------|----------|----------|
 | `meta-llama/llama-3.2-11b-vision-instruct:free` | Fast (3-5s) | 85-90% | High volume |
 | `meta-llama/llama-3.2-90b-vision-instruct:free` | Slow (10-15s) | 95%+ | Complex PDFs ⭐ |
 | `google/gemini-flash-1.5-8b` | Medium (5-8s) | 90-95% | Balanced |
+
+Free models = $0 per request, but account must have credits loaded.
 
 ## How It Works
 
@@ -83,6 +93,13 @@ curl http://localhost:3000/routes
 ```
 
 ## Troubleshooting
+
+**HTTP 402 - Payment Required:**
+```bash
+# Your OpenRouter API key needs credits
+# Add credits at: https://openrouter.ai/credits
+# Even "free" models require an account with credits loaded
+```
 
 **0 waypoints extracted:**
 ```bash
