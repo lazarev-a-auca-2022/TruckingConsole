@@ -9,6 +9,7 @@ const { parseMissouri } = require('../parsers/missouriParser');
 const { parseNorthDakota } = require('../parsers/northDakotaParser');
 const { parseIndiana } = require('../parsers/indianaParser');
 const { parseVirginia } = require('../parsers/virginiaParser');
+const { parseTexasPermit } = require('../parsers/texasParser');
 
 const STATE_PARSERS = {
   'IL': parseIllinois,
@@ -16,7 +17,29 @@ const STATE_PARSERS = {
   'MO': parseMissouri,
   'ND': parseNorthDakota,
   'IN': parseIndiana,
-  'VA': parseVirginia
+  'VA': parseVirginia,
+  'TX': async (text) => {
+    // Texas parser returns array of waypoints, convert to parseResult format
+    const waypoints = parseTexasPermit(text);
+    if (!waypoints || waypoints.length < 2) {
+      return {
+        startPoint: null,
+        endPoint: null,
+        waypoints: [],
+        restrictions: [],
+        distance: null,
+        parseAccuracy: 0.2
+      };
+    }
+    return {
+      startPoint: { address: waypoints[0], description: 'Start point' },
+      endPoint: { address: waypoints[waypoints.length - 1], description: 'End point' },
+      waypoints: waypoints.slice(1, -1).map(wp => ({ address: wp, description: 'Waypoint' })),
+      restrictions: [],
+      distance: null,
+      parseAccuracy: 0.9
+    };
+  }
 };
 
 async function extractTextFromPdf(filePath) {

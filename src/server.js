@@ -85,7 +85,7 @@ app.get('/api', (req, res) => {
       '4. Generate Google Maps URL with all route points',
       '5. Export GPX file for Garmin/navigation devices'
     ],
-    supportedStates: ['IL', 'WI', 'MO', 'ND', 'IN', 'VA']
+  supportedStates: ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX']
   });
 });
 

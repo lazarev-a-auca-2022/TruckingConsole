@@ -137,7 +137,8 @@ function createSampleRoute(routeId) {
   else if (routeId.includes('nd')) state = 'ND';
   else if (routeId.includes('in')) state = 'IN';
   else if (routeId.includes('va')) state = 'VA';
-  
+  else if (routeId.includes('tx')) state = 'TX';
+
   const sampleRoutes = {
     'IL': {
       routeId,
@@ -219,9 +220,32 @@ function createSampleRoute(routeId) {
         restrictions: [],
         distance: { value: 90, unit: 'miles' }
       }
+    },
+    'TX': {
+      routeId,
+      state: 'TX',
+      parseResult: {
+        startPoint: { address: 'Texarkana, AR' },
+        endPoint: { address: 'SL0224, 0.3mi SW of SL224 & FM 1275, TX' },
+        waypoints: [
+          { address: 'Nash, TX' },
+          { address: 'Wake Village, TX' },
+          { address: 'Eylau, TX' },
+          { address: 'South Lake, TX' },
+          { address: 'Atlanta, TX' },
+          { address: 'Linden, TX' },
+          { address: 'Carthage, TX' },
+          { address: 'Tenaha, TX' },
+          { address: 'Redfield, TX' },
+          { address: 'Bonita Junction, TX' },
+          { address: 'Hayward Junction, TX' }
+        ],
+        restrictions: [],
+        distance: { value: 160, unit: 'miles' }
+      }
     }
   };
-  
+
   return sampleRoutes[state] || sampleRoutes['IL'];
 }
 
