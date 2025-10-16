@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/trucking_permits
+      - OPENROUTER_API_KEY=PUT_KEY_HERE
+      - USE_AI_PARSER=true
+      - AI_MODEL=meta-llama/llama-4-maverick:free
+    depends_on:
+      - mongo
+    volumes:
+      - ./uploads:/app/uploads
+      - ./temp:/app/temp
+      - ./sample-permits:/app/sample-permits
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
