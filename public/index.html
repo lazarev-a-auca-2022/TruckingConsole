@@ -231,14 +231,15 @@
             </div>
             
             <div class="state-selector">
-                <label for="stateSelect">Select State:</label>
+                <label for="stateSelect">Select State (Optional - Auto-detect if blank):</label>
                 <select id="stateSelect">
-                    <option value="">Choose state...</option>
+                    <option value="">🤖 Auto-detect state using AI</option>
                     <option value="IL">Illinois (IL)</option>
                     <option value="WI">Wisconsin (WI)</option>
                     <option value="MO">Missouri (MO)</option>
                     <option value="ND">North Dakota (ND)</option>
                     <option value="IN">Indiana (IN)</option>
+                    <option value="VA">Virginia (VA)</option>
                 </select>
             </div>
             
@@ -338,11 +339,11 @@
         }
 
         function updateProcessButton() {
-            processBtn.disabled = !selectedFile || !stateSelect.value;
+            processBtn.disabled = !selectedFile;
         }
 
         async function processFile() {
-            if (!selectedFile || !stateSelect.value) return;
+            if (!selectedFile) return;
 
             showStatus('Processing permit...', 'processing');
             showProgress(0);
@@ -351,7 +352,9 @@
 
             const formData = new FormData();
             formData.append('permit', selectedFile);
-            formData.append('state', stateSelect.value);
+            if (stateSelect.value) {
+                formData.append('state', stateSelect.value);
+            }
 
             try {
                 // Simulate progress

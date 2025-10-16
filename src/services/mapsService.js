@@ -136,6 +136,7 @@ function createSampleRoute(routeId) {
   else if (routeId.includes('mo')) state = 'MO';
   else if (routeId.includes('nd')) state = 'ND';
   else if (routeId.includes('in')) state = 'IN';
+  else if (routeId.includes('va')) state = 'VA';
   
   const sampleRoutes = {
     'IL': {
@@ -203,6 +204,20 @@ function createSampleRoute(routeId) {
         ],
         restrictions: [],
         distance: { value: 120, unit: 'miles' }
+      }
+    },
+    'VA': {
+      routeId,
+      state: 'VA',
+      parseResult: {
+        startPoint: { address: 'Richmond, VA' },
+        endPoint: { address: 'Norfolk, VA' },
+        waypoints: [
+          { address: 'Petersburg, VA' },
+          { address: 'Suffolk, VA' }
+        ],
+        restrictions: [],
+        distance: { value: 90, unit: 'miles' }
       }
     }
   };

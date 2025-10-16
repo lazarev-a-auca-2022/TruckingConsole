@@ -15,6 +15,94 @@ class OpenRouterOCR {
   }
 
   /**
+   * Detect the state/issuing authority from a permit document
+   */
+  async detectState(permitPath) {
+    try {
+      logger.info(`Detecting state from permit: ${permitPath}`);
+      
+      if (!this.apiKey) {
+        throw new Error('OpenRouter API key is required for state detection');
+      }
+
+      // Read and encode permit image
+      const imageBuffer = await fs.readFile(permitPath);
+      const base64Image = imageBuffer.toString('base64');
+      
+      const prompt = `Analyze this truck permit document and determine which US state issued it.
+
+Look for:
+- State name or abbreviation (IL, WI, MO, ND, IN, VA, etc.)
+- Department of Transportation logos/headers
+- Official state seals or letterheads
+- Address information showing state
+- Any text indicating issuing authority
+
+Return ONLY the two-letter state code (e.g., "IL", "WI", "MO", "ND", "IN", "VA") based on which state issued this permit.
+
+If you cannot determine the state with confidence, return "UNKNOWN".`;
+
+      logger.info('Making state detection API request to OpenRouter');
+      
+      const response = await axios.post(this.baseUrl, {
+        model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { 
+                type: 'image_url', 
+                image_url: { 
+                  url: `data:image/png;base64,${base64Image}` 
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://trucking-console.app',
+          'X-Title': 'Trucking Console State Detection'
+        }
+      });
+
+      if (!response.data.choices || !response.data.choices[0]) {
+        throw new Error('No response from OpenRouter API');
+      }
+
+      const detectedState = response.data.choices[0].message.content.trim().toUpperCase();
+      
+      // Validate the detected state
+      const validStates = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA'];
+      const finalState = validStates.includes(detectedState) ? detectedState : 'UNKNOWN';
+      
+      logger.info(`State detection result: ${finalState}`);
+      return finalState;
+
+    } catch (error) {
+      logger.error(`State detection failed: ${error.message}`);
+      
+      // Try to guess from filename as fallback
+      const filename = path.basename(permitPath).toUpperCase();
+      const validStates = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA'];
+      
+      for (const state of validStates) {
+        if (filename.includes(state)) {
+          logger.info(`Fallback: detected state ${state} from filename`);
+          return state;
+        }
+      }
+      
+      return 'UNKNOWN';
+    }
+  }
+
+  /**
    * Analyze the permit template to identify field positions
    */
   async analyzeTemplate(templatePath) {

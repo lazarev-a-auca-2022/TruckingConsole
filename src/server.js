@@ -74,16 +74,18 @@ app.get('/api', (req, res) => {
     version: '1.0.0',
     description: 'Parse trucking permits and convert route data into Google Maps URLs and GPX files',
     endpoints: [
-      'POST /api/parse - Upload and parse permit file (PDF or image)',
+      'POST /api/parse - Upload and parse permit file (PDF or image) - Auto-detects state using AI',
       'GET /api/maps-url/:id - Get Google Maps URL for the route',
       'GET /api/gpx/:id - Download GPX file for Garmin navigation'
     ],
     workflow: [
       '1. Upload permit document (PDF or image)',
-      '2. Extract route data (start/end points, waypoints, restrictions)',
-      '3. Generate Google Maps URL with all route points',
-      '4. Export GPX file for Garmin/navigation devices'
-    ]
+      '2. AI automatically detects the issuing state',
+      '3. Extract route data (start/end points, waypoints, restrictions)',
+      '4. Generate Google Maps URL with all route points',
+      '5. Export GPX file for Garmin/navigation devices'
+    ],
+    supportedStates: ['IL', 'WI', 'MO', 'ND', 'IN', 'VA']
   });
 });
 
@@ -95,11 +97,8 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     }
 
     const { state } = req.body;
-    if (!state) {
-      return res.status(400).json({ error: 'State parameter is required' });
-    }
-
-    logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state}`);
+    
+    logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state || 'auto-detect'}`);
     tempFilePath = req.file.path;
 
     const result = await parsePermit(req.file.path, state);
