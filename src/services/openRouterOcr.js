@@ -11,7 +11,9 @@ class OpenRouterOCR {
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    this.model = process.env.AI_MODEL || 'meta-llama/llama-3.2-90b-vision-instruct:free';
     this.templateAnalysis = new Map(); // Cache template analysis
+    logger.info(`OpenRouter OCR initialized with model: ${this.model}`);
   }
 
   /**
@@ -45,7 +47,7 @@ If you cannot determine the state with confidence, return "UNKNOWN".`;
       logger.info('Making state detection API request to OpenRouter');
       
       const response = await axios.post(this.baseUrl, {
-        model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+        model: this.model,
         messages: [
           {
             role: 'user',
@@ -168,11 +170,11 @@ Look for fields like:
 Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792px).`;
 
       logger.info(`Making API request to: ${this.baseUrl}`);
-      logger.info(`Request model: meta-llama/llama-3.2-11b-vision-instruct:free`);
+      logger.info(`Request model: ${this.model}`);
       logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
 
       const response = await axios.post(this.baseUrl, {
-        model: "meta-llama/llama-3.2-11b-vision-instruct:free",  // Free vision model
+        model: this.model,
         messages: [
           {
             role: "user",
@@ -277,7 +279,7 @@ Please return a JSON object with the extracted text mapped to field names:
 Focus on accuracy - only include text you're confident about. Leave fields empty if uncertain.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "meta-llama/llama-3.2-11b-vision-instruct:free", 
+        model: this.model,
         messages: [
           {
             role: "user",
@@ -455,11 +457,8 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
       
       const prompt = `Extract ALL visible text from this permit image. Return only the raw text without any formatting or structure. Include company names, addresses, numbers, dates, and any other text you can see.`;
 
-      // Use the same model as configured in environment
-      const model = process.env.AI_MODEL || "meta-llama/llama-3.2-11b-vision-instruct:free";
-      
       const response = await axios.post(this.baseUrl, {
-        model: model,
+        model: this.model,
         messages: [
           {
             role: "user",
