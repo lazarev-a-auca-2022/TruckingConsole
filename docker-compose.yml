@@ -10,7 +10,7 @@ services:
       - MONGODB_URI=mongodb://mongo:27017/trucking_permits
       - OPENROUTER_API_KEY=PUT_KEY_HERE
       - USE_AI_PARSER=true
-      - AI_MODEL=openai/gpt-5-image-mini
+      - AI_MODEL=openrouter/polaris-alpha
     depends_on:
       - mongo
     volumes:
