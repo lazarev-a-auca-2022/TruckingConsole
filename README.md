@@ -140,39 +140,3 @@ tests/
 └── *.test.js                   # Jest tests
 ```
 
-## License
-
-<<<<<<< HEAD
-The application includes a Dockerfile for easy deployment on remote servers.
-
-## Route Verification Workflow (NEW!)
-
-For image permits (PNG, JPG, etc.), the system now uses a 4-step verification process:
-
-1. **Extract Waypoints** - LLM reads permit image and extracts all route points
-2. **Verify Waypoints** - LLM re-reads image to double-check extracted waypoints
-3. **Geocode to Coordinates** - Converts addresses to GPS coordinates (lat/lng)
-4. **Generate Maps JSON** - Creates Google Maps compatible JSON with coordinates
-
-See [ROUTE_VERIFICATION.md](ROUTE_VERIFICATION.md) for detailed documentation.
-
-### Test Route Verification
-
-```bash
-node test-route-verification.js
-```
-
-## Testing
-
-Run tests:
-```bash
-npm test
-```
-
-Test route verification workflow:
-```bash
-node test-route-verification.js
-```
-=======
-MIT
->>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
