@@ -3,16 +3,12 @@ const { pdfToPng } = require('pdf-to-png-converter');
 const path = require('path');
 const logger = require('../utils/logger');
 const OpenRouterOCR = require('./openRouterOcr');
-<<<<<<< HEAD
 const RouteVerificationService = require('./routeVerificationService');
 const { parseIllinois } = require('../parsers/illinoisParser');
 const { parseWisconsin } = require('../parsers/wisconsinParser');
 const { parseMissouri } = require('../parsers/missouriParser');
 const { parseNorthDakota } = require('../parsers/northDakotaParser');
 const { parseIndiana } = require('../parsers/indianaParser');
-=======
-const AIPermitParser = require('./aiPermitParser');
->>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
 
 // Supported states for AI parsing
 const SUPPORTED_STATES = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX'];
@@ -158,7 +154,6 @@ async function parsePermit(filePath, state = null) {
         throw new Error('OpenRouter API key is required for image processing. Please set OPENROUTER_API_KEY in docker-compose.yml');
       }
       
-<<<<<<< HEAD
       // NEW WORKFLOW: Use RouteVerificationService for double-checking
       const verificationService = new RouteVerificationService();
       const verificationResult = await verificationService.processPermitRoute(filePath);
@@ -193,31 +188,6 @@ async function parsePermit(filePath, state = null) {
       
       logger.info(`OpenRouter OCR completed with confidence: ${result.extractedData.confidence}`);
       logger.info(`Route verification completed with ${verificationResult.geocodedWaypoints.length} waypoints`);
-=======
-      try {
-        const ocr = new OpenRouterOCR();
-        
-        // Use simple raw text extraction for images
-        logger.info('Extracting text from image with AI vision...');
-        extractedText = await ocr.extractRawText(filePath);
-        
-        if (!extractedText || extractedText.trim().length < 50) {
-          throw new Error(`Failed to extract meaningful text from image. Only ${extractedText?.trim().length || 0} characters extracted. The image may be low quality or the AI vision service is unavailable.`);
-        }
-        
-        logger.info(`✅ Successfully extracted ${extractedText.length} characters from image`);
-        
-      } catch (ocrError) {
-        logger.error(`❌ Image OCR failed: ${ocrError.message}`);
-        
-        // If it's a 402 or 404 error, provide specific message
-        if (ocrError.message.includes('402') || ocrError.message.includes('404') || ocrError.message.includes('credits')) {
-          throw new Error(`Vision OCR failed: ${ocrError.message}. Please check your OpenRouter API key and credits.`);
-        }
-        
-        throw new Error(`Unable to process image: ${ocrError.message}`);
-      }
->>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
     } else {
       throw new Error(`Unsupported file format: ${fileExtension}. Supported formats: .pdf, .png, .jpg, .jpeg, .gif, .bmp, .tiff, .webp`);
     }
