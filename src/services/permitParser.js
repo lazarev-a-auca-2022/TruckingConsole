@@ -87,7 +87,7 @@ async function parsePermit(filePath, state = null) {
     
     // Determine file type and extract text accordingly
     if (fileExtension === '.pdf') {
-      logger.info('Processing PDF file with AI vision...');
+      logger.info('Processing PDF file with AI vision and coordinate verification...');
       
       if (!process.env.OPENROUTER_API_KEY) {
         throw new Error('OpenRouter API key is required for PDF processing. Please set OPENROUTER_API_KEY in docker-compose.yml');
@@ -98,13 +98,25 @@ async function parsePermit(filePath, state = null) {
         const imagePages = await convertPdfToImages(filePath);
         logger.info(`Processing ${imagePages.length} PDF pages with AI vision`);
         
-        // Process each page with AI vision and combine results
+        // NEW: Use RouteVerificationService on first page for coordinate extraction
+        logger.info('🗺️  Running coordinate verification on PDF page 1...');
+        const verificationService = new RouteVerificationService();
+        const verificationResult = await verificationService.processPermitRoute(imagePages[0]);
+        
+        // Store verification result for later use in mapsService
+        if (!parsePermit.verificationCache) {
+          parsePermit.verificationCache = new Map();
+        }
+        parsePermit.verificationCache.set(filePath, verificationResult);
+        logger.info(`✅ PDF coordinate verification completed with ${verificationResult.geocodedWaypoints.length} geocoded waypoints`);
+        
+        // Process each page with AI vision and combine results for text extraction
         const ocr = new OpenRouterOCR();
         const pageTexts = [];
         let failedPages = 0;
         
         for (let i = 0; i < imagePages.length; i++) {
-          logger.info(`Processing page ${i + 1}/${imagePages.length}...`);
+          logger.info(`Processing page ${i + 1}/${imagePages.length} for text extraction...`);
           try {
             const pageText = await ocr.extractRawText(imagePages[i]);
             pageTexts.push(pageText);
