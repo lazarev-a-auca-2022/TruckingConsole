@@ -124,7 +124,14 @@ Return ALL 7 entries:
   ]
 }
 
-NOW: Extract ALL routing entries from this permit. Count carefully and include EVERYTHING.`;
+NOW: Extract ALL routing entries from this permit. Count carefully and include EVERYTHING.
+
+IMPORTANT FOR ACCURACY:
+- If you see specific street addresses (like "802-898 South Huttig Avenue"), include them EXACTLY
+- If you see intersection details (like "I-435 N at state border"), include them EXACTLY  
+- Pay attention to directional indicators (N, S, E, W, NE, etc.)
+- Don't skip intermediate cities between major destinations
+- If the permit lists highways between cities, convert each to the nearest city along that route`;
 
       const response = await axios.post(this.baseUrl, {
         model: model,
@@ -145,8 +152,8 @@ NOW: Extract ALL routing entries from this permit. Count carefully and include E
             ]
           }
         ],
-        max_tokens: 2000,
-        temperature: 0.1
+        max_tokens: 6000,
+        temperature: 0.05
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -229,6 +236,13 @@ VERIFICATION CHECKLIST:
 
 CRITICAL: If the permit routing table has 10 entries but we only extracted 4, ADD THE 6 MISSING ONES.
 
+PAY SPECIAL ATTENTION TO:
+- Street addresses with house numbers (include full address)
+- Highway/route numbers with directions (I-70 E, US-40 W, etc.)
+- Intersection points (where routes meet)
+- Cities that appear multiple times (may indicate route passes through twice)
+- Small towns between major cities
+
 Return this JSON structure:
 
 {
@@ -268,8 +282,8 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
             ]
           }
         ],
-        max_tokens: 4000,
-        temperature: 0.1
+        max_tokens: 6000,
+        temperature: 0.05
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -324,9 +338,18 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
       
       const geocodedWaypoints = [];
 
-      for (const waypoint of verifiedWaypoints) {
+      // Geocode with context awareness - previous and next waypoints help accuracy
+      for (let i = 0; i < verifiedWaypoints.length; i++) {
+        const waypoint = verifiedWaypoints[i];
+        const prevWaypoint = i > 0 ? geocodedWaypoints[i - 1] : null;
+        const nextWaypoint = i < verifiedWaypoints.length - 1 ? verifiedWaypoints[i + 1] : null;
+        
         try {
-          const coordinates = await this.geocodeAddress(waypoint.address);
+          const coordinates = await this.geocodeAddressWithContext(
+            waypoint.address, 
+            prevWaypoint?.formattedAddress,
+            nextWaypoint?.address
+          );
           
           geocodedWaypoints.push({
             ...waypoint,
@@ -346,13 +369,30 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
         } catch (error) {
           logger.error(`  ✗ Failed to geocode: ${waypoint.address} - ${error.message}`);
           
-          // Add waypoint without coordinates if geocoding fails
-          geocodedWaypoints.push({
-            ...waypoint,
-            coordinates: null,
-            geocoded: false,
-            error: error.message
-          });
+          // Try one more time with relaxed validation
+          try {
+            logger.info(`  🔄 Retrying with relaxed validation...`);
+            const coordinates = await this.geocodeAddressRelaxed(waypoint.address);
+            geocodedWaypoints.push({
+              ...waypoint,
+              coordinates: {
+                lat: coordinates.lat,
+                lng: coordinates.lng
+              },
+              formattedAddress: coordinates.formatted_address,
+              geocoded: true,
+              relaxedGeocoding: true
+            });
+            logger.info(`  ✓ Retry successful: ${waypoint.address} → ${coordinates.lat}, ${coordinates.lng}`);
+          } catch (retryError) {
+            // Add waypoint without coordinates if geocoding fails completely
+            geocodedWaypoints.push({
+              ...waypoint,
+              coordinates: null,
+              geocoded: false,
+              error: error.message
+            });
+          }
         }
       }
 
@@ -368,23 +408,51 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
   }
 
   /**
-   * Geocode a single address to coordinates
-   * Uses Google Maps Geocoding API if available, otherwise uses OpenRouter LLM
+   * Geocode with context from surrounding waypoints for better accuracy
    */
-  async geocodeAddress(address) {
+  async geocodeAddressWithContext(address, prevAddress, nextAddress) {
     try {
       // Try Google Maps API first if key is available
       if (this.googleMapsApiKey) {
         return await this.geocodeWithGoogleMaps(address);
       }
       
-      // Fallback: Use OpenRouter LLM for geocoding
-      return await this.geocodeWithLLM(address);
+      // Use LLM with route context for better accuracy
+      const contextPrompt = prevAddress && nextAddress
+        ? `\n\nROUTE CONTEXT: This waypoint is between "${prevAddress}" and "${nextAddress}" on a truck route. Use this to determine the most logical location.`
+        : prevAddress
+        ? `\n\nROUTE CONTEXT: This waypoint comes after "${prevAddress}" on a truck route.`
+        : nextAddress
+        ? `\n\nROUTE CONTEXT: This waypoint comes before "${nextAddress}" on a truck route.`
+        : '';
+      
+      return await this.geocodeWithLLM(address, contextPrompt);
       
     } catch (error) {
-      logger.error(`Geocoding error for "${address}": ${error.message}`);
+      logger.error(`Context-aware geocoding error for "${address}": ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Geocode with relaxed validation (for retry attempts)
+   */
+  async geocodeAddressRelaxed(address) {
+    try {
+      if (this.googleMapsApiKey) {
+        return await this.geocodeWithGoogleMaps(address);
+      }
+      return await this.geocodeWithLLM(address, '', true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy method - now routes to context-aware version
+   */
+  async geocodeAddress(address) {
+    return await this.geocodeAddressWithContext(address, null, null);
   }
 
   /**
@@ -423,11 +491,11 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
    * Geocode using LLM (fallback method)
    * Note: Less accurate than Google Maps API
    */
-  async geocodeWithLLM(address) {
+  async geocodeWithLLM(address, contextHint = '', relaxed = false) {
     try {
       const prompt = `Convert this address to geographic coordinates (latitude and longitude):
 
-Address: ${address}
+Address: ${address}${contextHint}
 
 Return ONLY a JSON object with coordinates:
 
@@ -437,13 +505,15 @@ Return ONLY a JSON object with coordinates:
   "formatted_address": "Chicago, IL, USA"
 }
 
-IMPORTANT: 
-- Provide the most accurate coordinates possible based on your knowledge
-- For highway intersections or exits, find the nearest city and use those coordinates
-- For "I-70 E" → find a specific city along I-70 (like "Columbia, MO")
-- For "Exit 25" → research which city that exit is near
-- NEVER return just "United States" or "USA" - always include a specific city and state
-- If you can't find exact location, use the nearest major city along the route`;
+CRITICAL INSTRUCTIONS FOR ACCURACY:
+- For full street addresses with numbers (e.g., "802-898 South Huttig Avenue"), geocode the EXACT location
+- For intersections (e.g., "I-435 N at KS/MO border"), find the precise coordinates of that intersection
+- For highway references (e.g., "I-70 E"), identify which specific city/exit along that highway
+- For city names alone, use the city center coordinates
+- Always include street name, city, state in formatted_address
+- Be as specific as possible - use exact address if provided
+- NEVER return vague locations like "United States" or "USA" alone
+- Cross-reference with surrounding route context if provided`;
 
       const response = await axios.post(this.baseUrl, {
         model: this.models[0],
@@ -453,8 +523,8 @@ IMPORTANT:
             content: prompt
           }
         ],
-        max_tokens: 300,
-        temperature: 0.1
+        max_tokens: 400,
+        temperature: 0.05
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -462,7 +532,7 @@ IMPORTANT:
           'HTTP-Referer': 'https://trucking-console.app',
           'X-Title': 'Trucking Console Geocoding'
         },
-        timeout: 10000
+        timeout: 15000
       });
 
       const content = response.data.choices[0].message.content;
@@ -479,12 +549,14 @@ IMPORTANT:
         throw new Error('Invalid coordinates in response');
       }
 
-      // Validate that we got a real location, not just "United States"
-      const formattedAddr = coordinates.formatted_address || '';
-      if (formattedAddr.toLowerCase() === 'united states' || 
-          formattedAddr.toLowerCase() === 'usa' ||
-          !formattedAddr.includes(',')) {
-        throw new Error(`Geocoding returned vague location: ${formattedAddr}`);
+      // Validate that we got a real location (skip validation if relaxed mode)
+      if (!relaxed) {
+        const formattedAddr = coordinates.formatted_address || '';
+        if (formattedAddr.toLowerCase() === 'united states' || 
+            formattedAddr.toLowerCase() === 'usa' ||
+            (!formattedAddr.includes(',') && !formattedAddr.includes(' '))) {
+          throw new Error(`Geocoding returned vague location: ${formattedAddr}`);
+        }
       }
 
       return coordinates;
@@ -520,12 +592,16 @@ IMPORTANT:
       // Get intermediate waypoints
       let intermediateWaypoints = validWaypoints.filter(wp => wp !== origin && wp !== destination);
       
-      // Keep all waypoints as specified in the permit - do NOT remove duplicates
-      // Truck permits often specify exact routes that may pass through same cities
-      // intermediateWaypoints = this.removeDuplicateCities(intermediateWaypoints); // DISABLED
+      // KEEP ALL WAYPOINTS EXACTLY AS SPECIFIED IN THE PERMIT
+      // Truck permits specify required routes - we should NOT remove waypoints
+      // The permit may require specific roads, intersections, or paths that seem indirect
+      // Filtering removes critical waypoints and makes routes inaccurate
       
-      // Only minimal backtracking check with very lenient threshold
-      intermediateWaypoints = this.ensureGeographicOrder(origin, intermediateWaypoints, destination);
+      // ALL FILTERING DISABLED FOR MAXIMUM ACCURACY
+      // intermediateWaypoints = this.removeDuplicateCities(intermediateWaypoints); // DISABLED
+      // intermediateWaypoints = this.ensureGeographicOrder(origin, intermediateWaypoints, destination); // DISABLED
+      
+      logger.info(`   ✅ Keeping ALL ${intermediateWaypoints.length} waypoints as specified in permit (no filtering)`);
 
       const mapsJson = {
         origin: {
@@ -578,6 +654,12 @@ IMPORTANT:
       if (extractedWaypoints.length === 0) {
         throw new Error('No waypoints could be extracted from the permit document');
       }
+      
+      logger.info(`\n📋 EXTRACTED WAYPOINTS (${extractedWaypoints.length}):`);
+      extractedWaypoints.forEach((wp, idx) => {
+        logger.info(`   ${idx + 1}. [${wp.type}] ${wp.address}`);
+      });
+      logger.info('');
 
       // STEP 2: Verify waypoints
       const verificationResult = await this.verifyWaypoints(filePath, extractedWaypoints);
@@ -587,6 +669,14 @@ IMPORTANT:
       }
 
       const verifiedWaypoints = verificationResult.verifiedWaypoints;
+      
+      logger.info(`\n✓ VERIFIED WAYPOINTS (${verifiedWaypoints.length}):`);
+      verifiedWaypoints.forEach((wp, idx) => {
+        const verifiedLabel = wp.verified ? '✓' : '⚠';
+        logger.info(`   ${verifiedLabel} ${idx + 1}. [${wp.type}] ${wp.address}`);
+        if (wp.notes) logger.info(`      Note: ${wp.notes}`);
+      });
+      logger.info('');
 
       // STEP 3: Geocode to coordinates
       const geocodedWaypoints = await this.geocodeWaypoints(verifiedWaypoints);
