@@ -110,45 +110,18 @@ async function parsePermit(filePath, state = null) {
         parsePermit.verificationCache.set(filePath, verificationResult);
         logger.info(`✅ PDF coordinate verification completed with ${verificationResult.geocodedWaypoints.length} geocoded waypoints`);
         
-        // Process each page with AI vision and combine results for text extraction
-        const ocr = new OpenRouterOCR();
-        const pageTexts = [];
-        let failedPages = 0;
-        
-        for (let i = 0; i < imagePages.length; i++) {
-          logger.info(`Processing page ${i + 1}/${imagePages.length} for text extraction...`);
-          try {
-            const pageText = await ocr.extractRawText(imagePages[i]);
-            pageTexts.push(pageText);
-            logger.info(`✅ Page ${i + 1}: extracted ${pageText.length} characters`);
-          } catch (pageError) {
-            logger.error(`❌ Failed to process page ${i + 1}: ${pageError.message}`);
-            failedPages++;
-            
-            // If it's a 402 or 404 error, stop processing
-            if (pageError.message.includes('402') || pageError.message.includes('404') || pageError.message.includes('credits')) {
-              // Clean up and throw error
-              const imageDir = path.dirname(imagePages[0]);
-              await fs.remove(imageDir);
-              throw new Error(`Vision OCR failed: ${pageError.message}. Please check your OpenRouter API key and credits.`);
-            }
-          }
-        }
-        
         // Clean up temporary image files
         const imageDir = path.dirname(imagePages[0]);
         await fs.remove(imageDir);
         logger.info('✅ Cleaned up temporary PDF images');
         
-        // Combine all page texts
-        extractedText = pageTexts.join('\n\n--- PAGE BREAK ---\n\n');
+        // Use extracted waypoint data as text for AI parser (minimal text extraction)
+        const waypointSummary = verificationResult.geocodedWaypoints
+          .map(wp => `${wp.address} (${wp.type})`)
+          .join('\n');
         
-        // Check if we extracted meaningful text
-        if (!extractedText || extractedText.trim().length < 50) {
-          throw new Error(`Failed to extract text from PDF. Only ${extractedText.trim().length} characters extracted from ${imagePages.length} pages. ${failedPages} pages failed. The PDF may be corrupted or the AI vision service is unavailable.`);
-        }
-        
-        logger.info(`✅ Successfully extracted ${extractedText.length} characters from ${imagePages.length} pages (${failedPages} failed)`);
+        extractedText = `Route extracted via coordinate verification:\n${waypointSummary}`;
+        logger.info(`✅ Using coordinate-based route data (skipped full text extraction to save API calls)`);
         
       } catch (pdfError) {
         logger.error(`❌ PDF vision processing failed: ${pdfError.message}`);
