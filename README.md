@@ -46,7 +46,7 @@ Edit `docker-compose.yml`:
 ```yaml
 environment:
   - OPENROUTER_API_KEY=sk-or-v1-your-key-here  # Replace with your key
-  - AI_MODEL=anthropic/claude-sonnet-4.5  # Best accuracy
+  - AI_MODEL=google/gemini-pro-1.5  # Best accuracy
   - USE_AI_PARSER=true
 ```
 

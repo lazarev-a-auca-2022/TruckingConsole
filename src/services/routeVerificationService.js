@@ -15,16 +15,54 @@ class RouteVerificationService {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    
+    // Recommended models (in order of accuracy for document extraction):
+    // 1. google/gemini-pro-1.5 (best for document understanding)
+    // 2. anthropic/claude-3.5-sonnet (excellent vision, good reasoning)
+    // 3. google/gemini-pro-1.5 (current default)
+    // 4. openai/gpt-4-vision-preview (good but more expensive)
+    this.model = process.env.VISION_MODEL || 'google/gemini-pro-1.5';
+    logger.info(`🤖 Using vision model: ${this.model}`);
   }
 
   /**
    * STEP 1: Extract waypoints/route points from permit (PDF or image)
    * Returns street addresses/location names
+   * Uses cascading model fallback for best accuracy
    */
   async extractWaypoints(filePath) {
+    const models = [
+      'google/gemini-pro-1.5',
+      'anthropic/claude-3.5-sonnet',
+      'google/gemini-pro-1.5',
+      'openai/gpt-4-vision-preview'
+    ];
+
+    for (const model of models) {
+      try {
+        logger.info(`📍 STEP 1: Extracting waypoints with ${model}`);
+        const result = await this.extractWaypointsWithModel(filePath, model);
+        
+        // Check if we got good results
+        if (result && result.length > 0) {
+          logger.info(`✅ Successfully extracted ${result.length} waypoints with ${model}`);
+          return result;
+        }
+        
+        logger.warn(`⚠️  ${model} returned no waypoints, trying next model...`);
+      } catch (error) {
+        logger.error(`❌ ${model} failed: ${error.message}, trying next model...`);
+      }
+    }
+
+    throw new Error('All models failed to extract waypoints');
+  }
+
+  /**
+   * Extract waypoints using a specific model
+   */
+  async extractWaypointsWithModel(filePath, model) {
     try {
-      logger.info(`📍 STEP 1: Extracting waypoints from: ${filePath}`);
-      
       const fileBuffer = await fs.readFile(filePath);
       const fileExtension = require('path').extname(filePath).toLowerCase();
       
@@ -49,46 +87,54 @@ class RouteVerificationService {
         logger.info(`🖼️  Processing ${mediaType} image`);
       }
       
-      const prompt = `You are analyzing a truck oversize/overweight permit. Extract the complete route with ALL waypoints.
+      const prompt = `TASK: Extract the complete routing information from this truck permit.
 
-INSTRUCTIONS:
-1. Locate the "Routing" or "Route" table/section in the permit
-2. Extract EVERY SINGLE row/entry from that routing table in sequential order
-3. Each row in the routing table is a waypoint - include ALL of them
-4. For each waypoint, extract the city and state (format: "City, ST")
-5. If only a highway/route number is given (like "I-70" or "US-40"), identify the nearest city on that highway in the context of the route
-6. Keep the exact sequence as shown in the permit - do NOT reorder
-7. Do NOT skip entries, do NOT summarize, do NOT combine waypoints
-8. Do NOT add waypoints not explicitly mentioned in the permit
+STEP 1: Find the "Routing" or "Route" section
+STEP 2: Read EVERY line in that section word-for-word
+STEP 3: Convert to a structured list
 
-EXAMPLE:
-If the permit routing table shows:
-Row 1: Kansas City, MO
-Row 2: I-70 E
-Row 3: Columbia, MO  
-Row 4: I-70 E
-Row 5: St. Charles, MO
-Row 6: St. Louis, MO
-Row 7: Collinsville, IL
+CRITICAL RULES:
+- Extract EVERY SINGLE LINE from the routing section
+- Do NOT skip ANY entries, even if they seem redundant
+- Do NOT interpret or simplify - extract exactly what you see
+- Include highway numbers, route numbers, city names - EVERYTHING
+- Preserve the EXACT order shown in the document
+- If you see 15 lines in the routing section, return 15 waypoints
 
-Then extract ALL 7 entries (convert highway-only rows to nearest cities).
+FORMAT REQUIREMENTS:
+- For city entries: "City Name, STATE" (e.g., "Kansas City, MO")
+- For highway entries: Include the highway AND the nearest city (e.g., "I-70 E near Columbia, MO")
+- For intersections: Include both roads and nearest city (e.g., "I-70 & US-40 near Kansas City, MO")
 
-OUTPUT FORMAT - Return ONLY this JSON structure:
+EXAMPLE - If permit shows:
+━━━━━━━━━━━━━━━━━━━━
+ROUTING:
+1. Kansas City, MO
+2. I-70 East
+3. Lawrence, KS
+4. Topeka, KS
+5. I-70 East
+6. Junction City, KS
+7. Salina, KS
+━━━━━━━━━━━━━━━━━━━━
 
+Return ALL 7 entries:
 {
   "waypoints": [
-    {"order": 1, "type": "origin", "address": "First City, ST"},
-    {"order": 2, "type": "waypoint", "address": "Second City, ST"},
-    {"order": 3, "type": "waypoint", "address": "Third City, ST"},
-    ...include every waypoint in sequence...
-    {"order": N, "type": "destination", "address": "Last City, ST"}
+    {"order": 1, "type": "origin", "address": "Kansas City, MO"},
+    {"order": 2, "type": "waypoint", "address": "I-70 East near Lawrence, KS"},
+    {"order": 3, "type": "waypoint", "address": "Lawrence, KS"},
+    {"order": 4, "type": "waypoint", "address": "Topeka, KS"},
+    {"order": 5, "type": "waypoint", "address": "I-70 East near Junction City, KS"},
+    {"order": 6, "type": "waypoint", "address": "Junction City, KS"},
+    {"order": 7, "type": "destination", "address": "Salina, KS"}
   ]
 }
 
-Count the routing table rows carefully and include them ALL. Be thorough and complete - this is critical for accurate truck routing.`;
+NOW: Extract ALL routing entries from this permit. Count carefully and include EVERYTHING.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5",
+        model: "google/gemini-pro-1.5",
         messages: [
           {
             role: "user",
@@ -211,7 +257,7 @@ Return this JSON structure:
 Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compared to the permit. Add any missing entries.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5",
+        model: model,
         messages: [
           {
             role: "user",
@@ -229,7 +275,7 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
             ]
           }
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
         temperature: 0.1
       }, {
         headers: {
@@ -238,7 +284,7 @@ Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compar
           'HTTP-Referer': 'https://trucking-console.app',
           'X-Title': 'Trucking Console Route Verification'
         },
-        timeout: 30000
+        timeout: 45000
       });
 
       const content = response.data.choices[0].message.content;
@@ -407,7 +453,7 @@ IMPORTANT:
 - If you can't find exact location, use the nearest major city along the route`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5",
+        model: this.model,
         messages: [
           {
             role: "user",

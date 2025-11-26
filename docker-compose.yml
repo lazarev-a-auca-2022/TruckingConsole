@@ -10,7 +10,13 @@ services:
       - MONGODB_URI=mongodb://mongo:27017/trucking_permits
       - OPENROUTER_API_KEY=PUT_KEY_HERE
       - USE_AI_PARSER=true
-      - AI_MODEL=anthropic/claude-sonnet-4.5
+      - AI_MODEL=google/gemini-pro-1.5
+      # VISION_MODEL options (recommended order by accuracy):
+      # - google/gemini-pro-1.5 (BEST for document extraction, most accurate)
+      # - anthropic/claude-3.5-sonnet (excellent vision + reasoning)
+      # - google/gemini-pro-1.5 (good all-rounder)
+      # - openai/gpt-4-vision-preview (expensive but accurate)
+      - VISION_MODEL=google/gemini-pro-1.5
     depends_on:
       - mongo
     volumes:
