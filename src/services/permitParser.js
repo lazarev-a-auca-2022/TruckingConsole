@@ -72,7 +72,7 @@ async function parsePermit(filePath, state = null) {
           state = 'IL';
         }
       } else {
-        logger.info('Auto-detection not available (PDF or no API key), defaulting to Illinois');
+        logger.info('');
         state = 'IL';
       }
     }
