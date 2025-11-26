@@ -62,51 +62,65 @@ class AIPermitParser {
       try {
         parseResult = JSON.parse(content);
       } catch (parseError) {
-        logger.error(`Failed to parse AI response as JSON: ${parseError.message}`);
-        logger.info(`Attempting to extract JSON from response...`);
+        logger.info(`JSON parse failed, attempting to extract from markdown/text...`);
         
-        // Try to extract JSON from text that may contain explanations
-        // Strategy 1: Remove everything before first { and after last }
-        const firstBrace = content.indexOf('{');
-        const lastBrace = content.lastIndexOf('}');
+        // Remove markdown code blocks if present
+        let cleanedContent = content;
         
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          const jsonStr = content.substring(firstBrace, lastBrace + 1);
-          try {
-            parseResult = JSON.parse(jsonStr);
-            logger.info(`✅ Successfully extracted JSON by trimming explanatory text`);
-          } catch (e) {
-            // Strategy 2: Try to find complete JSON with balanced braces
-            const braceStack = [];
-            let jsonStart = -1;
-            let jsonEnd = -1;
-            
-            for (let i = 0; i < content.length; i++) {
-              if (content[i] === '{') {
-                if (braceStack.length === 0) jsonStart = i;
-                braceStack.push('{');
-              } else if (content[i] === '}') {
-                braceStack.pop();
-                if (braceStack.length === 0 && jsonStart !== -1) {
-                  jsonEnd = i;
-                  break;
+        // Remove ```json and ``` markers
+        cleanedContent = cleanedContent.replace(/```json\s*/g, '');
+        cleanedContent = cleanedContent.replace(/```\s*/g, '');
+        cleanedContent = cleanedContent.trim();
+        
+        // Try parsing the cleaned content
+        try {
+          parseResult = JSON.parse(cleanedContent);
+          logger.info(`✅ Successfully extracted JSON after removing markdown blocks`);
+        } catch (e) {
+          logger.info(`Still failed, trying bracket extraction...`);
+          
+          // Strategy: Extract content between first { and last }
+          const firstBrace = cleanedContent.indexOf('{');
+          const lastBrace = cleanedContent.lastIndexOf('}');
+          
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const jsonStr = cleanedContent.substring(firstBrace, lastBrace + 1);
+            try {
+              parseResult = JSON.parse(jsonStr);
+              logger.info(`✅ Successfully extracted JSON by bracket trimming`);
+            } catch (e) {
+              // Last resort: Try to find complete JSON with balanced braces
+              const braceStack = [];
+              let jsonStart = -1;
+              let jsonEnd = -1;
+              
+              for (let i = 0; i < cleanedContent.length; i++) {
+                if (cleanedContent[i] === '{') {
+                  if (braceStack.length === 0) jsonStart = i;
+                  braceStack.push('{');
+                } else if (cleanedContent[i] === '}') {
+                  braceStack.pop();
+                  if (braceStack.length === 0 && jsonStart !== -1) {
+                    jsonEnd = i;
+                    break;
+                  }
                 }
               }
-            }
-            
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-              try {
-                parseResult = JSON.parse(content.substring(jsonStart, jsonEnd + 1));
-                logger.info(`✅ Successfully extracted JSON with balanced braces`);
-              } catch (e2) {
-                throw new Error(`AI returned text but no valid JSON could be extracted. Response starts with: ${content.substring(0, 100)}`);
+              
+              if (jsonStart !== -1 && jsonEnd !== -1) {
+                try {
+                  parseResult = JSON.parse(cleanedContent.substring(jsonStart, jsonEnd + 1));
+                  logger.info(`✅ Successfully extracted JSON with balanced braces`);
+                } catch (e2) {
+                  throw new Error(`AI returned text but no valid JSON could be extracted. Response starts with: ${content.substring(0, 100)}`);
+                }
+              } else {
+                throw new Error(`AI did not return valid JSON. Response: ${content.substring(0, 200)}`);
               }
-            } else {
-              throw new Error(`AI did not return valid JSON. Response: ${content.substring(0, 200)}`);
             }
+          } else {
+            throw new Error(`AI did not return valid JSON. No braces found in response.`);
           }
-        } else {
-          throw new Error(`AI did not return valid JSON. No braces found in response.`);
         }
       }
 
