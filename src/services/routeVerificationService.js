@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const axios = require('axios');
 const logger = require('../utils/logger');
+const { getInstance: getExampleDB } = require('./exampleDatabase');
 
 /**
  * Route Verification Service
@@ -22,7 +23,14 @@ class RouteVerificationService {
     const visionModels = process.env.VISION_MODEL || process.env.AI_MODEL;
     this.models = visionModels.split(',').map(m => m.trim());
     
+    // Initialize example database for few-shot learning
+    this.exampleDB = getExampleDB();
+    this.exampleDB.initialize().catch(err => 
+      logger.warn(`Could not initialize example database: ${err.message}`)
+    );
+    
     logger.info(`🤖 Using vision models in order: ${this.models.join(' → ')}`);
+    logger.info(`📚 Few-shot learning enabled (examples will improve accuracy over time)`);
   }
 
   /**
@@ -82,7 +90,7 @@ class RouteVerificationService {
   /**
    * Extract waypoints using a specific model and strategy
    */
-  async extractWaypointsWithModel(filePath, model, strategy = 'detailed') {
+  async extractWaypointsWithModel(filePath, model, strategy = 'detailed', permitInfo = {}) {
     try {
       const fileBuffer = await fs.readFile(filePath);
       const fileExtension = require('path').extname(filePath).toLowerCase();
@@ -107,6 +115,10 @@ class RouteVerificationService {
         base64Data = fileBuffer.toString('base64');
         logger.info(`🖼️  Processing ${mediaType} image`);
       }
+      
+      // Get few-shot examples for improved accuracy
+      const fewShotExamples = await this.exampleDB.getBestExamples(permitInfo, 3);
+      const fewShotPrompt = this.exampleDB.buildFewShotPrompt(fewShotExamples);
       
       let prompt;
       
@@ -198,37 +210,75 @@ IMPORTANT FOR ACCURACY:
 - Don't skip intermediate cities between major destinations
 - If the permit lists highways between cities, convert each to the nearest city along that route`;
       }
+      
+      // Append few-shot examples if available
+      if (fewShotPrompt) {
+        prompt += fewShotPrompt;
+      }
+
+      // Use prompt caching for Anthropic models to reduce costs
+      const isAnthropicModel = model.includes('anthropic') || model.includes('claude');
+      
+      const messageContent = isAnthropicModel ? [
+        {
+          type: "text",
+          text: prompt,
+          cache_control: { type: "ephemeral" } // Cache the instructions for 5 minutes
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${mediaType};base64,${base64Data}`
+          }
+        }
+      ] : [
+        {
+          type: "text",
+          text: prompt
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${mediaType};base64,${base64Data}`
+          }
+        }
+      ];
+
+      const requestHeaders = {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://trucking-console.app',
+        'X-Title': 'Trucking Console Route Verification'
+      };
+
+      // Add Anthropic-specific headers for prompt caching
+      if (isAnthropicModel) {
+        requestHeaders['anthropic-version'] = '2023-06-01';
+        requestHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
+      }
 
       const response = await axios.post(this.baseUrl, {
         model: model,
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: prompt
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mediaType};base64,${base64Data}`
-                }
-              }
-            ]
+            content: messageContent
           }
         ],
         max_tokens: 6000,
         temperature: 0.05
       }, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://trucking-console.app',
-          'X-Title': 'Trucking Console Route Verification'
-        },
+        headers: requestHeaders,
         timeout: 30000
       });
+      
+      // Log cache usage if available (Anthropic returns this)
+      if (response.data.usage?.cache_creation_input_tokens) {
+        logger.info(`   💾 Cache created: ${response.data.usage.cache_creation_input_tokens} tokens`);
+      }
+      if (response.data.usage?.cache_read_input_tokens) {
+        logger.info(`   ⚡ Cache hit: ${response.data.usage.cache_read_input_tokens} tokens (90% cost savings!)`);
+      }
 
       const content = response.data.choices[0].message.content;
       logger.info(`Raw extraction response: ${content.substring(0, 200)}...`);
@@ -329,36 +379,64 @@ Return this JSON structure:
 
 Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compared to the permit. Add any missing entries.`;
 
+      const model = this.models[0];
+      const isAnthropicModel = model.includes('anthropic') || model.includes('claude');
+      
+      const messageContent = isAnthropicModel ? [
+        {
+          type: "text",
+          text: prompt,
+          cache_control: { type: "ephemeral" } // Cache verification instructions
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${mediaType};base64,${base64Data}`
+          }
+        }
+      ] : [
+        {
+          type: "text",
+          text: prompt
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${mediaType};base64,${base64Data}`
+          }
+        }
+      ];
+
+      const requestHeaders = {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://trucking-console.app',
+        'X-Title': 'Trucking Console Route Verification'
+      };
+
+      if (isAnthropicModel) {
+        requestHeaders['anthropic-version'] = '2023-06-01';
+        requestHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
+      }
+
       const response = await axios.post(this.baseUrl, {
-        model: this.models[0],
+        model: model,
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: prompt
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mediaType};base64,${base64Data}`
-                }
-              }
-            ]
+            content: messageContent
           }
         ],
         max_tokens: 6000,
         temperature: 0.05
       }, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://trucking-console.app',
-          'X-Title': 'Trucking Console Route Verification'
-        },
+        headers: requestHeaders,
         timeout: 45000
       });
+      
+      if (response.data.usage?.cache_read_input_tokens) {
+        logger.info(`   ⚡ Verification cache hit: ${response.data.usage.cache_read_input_tokens} tokens saved`);
+      }
 
       const content = response.data.choices[0].message.content;
       logger.info(`Raw verification response: ${content.substring(0, 200)}...`);
@@ -581,23 +659,42 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
 - NEVER return vague locations like "United States" or "USA" alone
 - Cross-reference with surrounding route context if provided`;
 
+      const model = this.models[0];
+      const isAnthropicModel = model.includes('anthropic') || model.includes('claude');
+      
+      // For geocoding, cache the instruction part of the prompt
+      const messageContent = isAnthropicModel ? [
+        {
+          type: "text",
+          text: prompt,
+          cache_control: { type: "ephemeral" }
+        }
+      ] : prompt;
+
+      const requestHeaders = {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://trucking-console.app',
+        'X-Title': 'Trucking Console Geocoding'
+      };
+
+      if (isAnthropicModel) {
+        requestHeaders['anthropic-version'] = '2023-06-01';
+        requestHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
+      }
+
       const response = await axios.post(this.baseUrl, {
-        model: this.models[0],
+        model: model,
         messages: [
           {
             role: "user",
-            content: prompt
+            content: isAnthropicModel ? messageContent : prompt
           }
         ],
         max_tokens: 400,
         temperature: 0.05
       }, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://trucking-console.app',
-          'X-Title': 'Trucking Console Geocoding'
-        },
+        headers: requestHeaders,
         timeout: 15000
       });
 
@@ -772,6 +869,26 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
       logger.info(`\n${'='.repeat(60)}`);
       logger.info(`✅ ROUTE VERIFICATION WORKFLOW COMPLETED`);
       logger.info(`${'='.repeat(60)}\n`);
+
+      // Store successful extraction as training example if verification confidence is high
+      if (verificationResult.verified && verificationResult.confidence >= 0.8) {
+        try {
+          await this.exampleDB.addExample(
+            permitInfo, // Contains state, permit type, etc.
+            verifiedWaypoints,
+            {
+              verified: true,
+              confidence: verificationResult.confidence,
+              geocodingSuccess: geocodedWaypoints.filter(wp => wp.geocoded).length / geocodedWaypoints.length,
+              timestamp: new Date().toISOString()
+            }
+          );
+          logger.info(`📚 Added verified extraction to training database (confidence: ${verificationResult.confidence})`);
+        } catch (dbError) {
+          logger.warn(`⚠️  Failed to save training example: ${dbError.message}`);
+          // Don't fail the whole operation if example storage fails
+        }
+      }
 
       return {
         success: true,
