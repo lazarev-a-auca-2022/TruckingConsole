@@ -10,7 +10,7 @@ class AIPermitParser {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
     // Use Claude Sonnet 4.5 model (best free option with vision)
-    this.model = process.env.AI_MODEL || 'google/gemini-pro-1.5';
+    this.model = process.env.AI_MODEL || 'anthropic/claude-sonnet-4.5';
     logger.info(`AI Parser initialized with model: ${this.model}`);
   }
 

@@ -17,11 +17,11 @@ class RouteVerificationService {
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
     
     // Recommended models (in order of accuracy for document extraction):
-    // 1. google/gemini-pro-1.5 (best for document understanding)
+    // 1. anthropic/claude-sonnet-4.5 (best for document understanding)
     // 2. anthropic/claude-3.5-sonnet (excellent vision, good reasoning)
-    // 3. google/gemini-pro-1.5 (current default)
+    // 3. anthropic/claude-sonnet-4.5 (current default)
     // 4. openai/gpt-4-vision-preview (good but more expensive)
-    this.model = process.env.VISION_MODEL || 'google/gemini-pro-1.5';
+    this.model = process.env.VISION_MODEL || 'anthropic/claude-sonnet-4.5';
     logger.info(`🤖 Using vision model: ${this.model}`);
   }
 
@@ -32,9 +32,9 @@ class RouteVerificationService {
    */
   async extractWaypoints(filePath) {
     const models = [
-      'google/gemini-pro-1.5',
+      'anthropic/claude-sonnet-4.5',
       'anthropic/claude-3.5-sonnet',
-      'google/gemini-pro-1.5',
+      'anthropic/claude-sonnet-4.5',
       'openai/gpt-4-vision-preview'
     ];
 
@@ -134,7 +134,7 @@ Return ALL 7 entries:
 NOW: Extract ALL routing entries from this permit. Count carefully and include EVERYTHING.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "google/gemini-pro-1.5",
+        model: "anthropic/claude-sonnet-4.5",
         messages: [
           {
             role: "user",
