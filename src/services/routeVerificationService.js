@@ -19,7 +19,7 @@ class RouteVerificationService {
     // Parse models from environment variables
     // VISION_MODEL: comma-separated list of models to try in order
     // AI_MODEL: fallback if VISION_MODEL not set
-    const visionModels = process.env.VISION_MODEL || process.env.AI_MODEL || 'google/gemini-pro-1.5,anthropic/claude-3.5-sonnet,anthropic/claude-sonnet-4.5,openai/gpt-4-vision-preview';
+    const visionModels = process.env.VISION_MODEL || process.env.AI_MODEL;
     this.models = visionModels.split(',').map(m => m.trim());
     
     logger.info(`🤖 Using vision models in order: ${this.models.join(' → ')}`);
