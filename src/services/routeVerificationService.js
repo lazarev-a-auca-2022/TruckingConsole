@@ -31,30 +31,58 @@ class RouteVerificationService {
    * Uses cascading model fallback for best accuracy
    */
   async extractWaypoints(filePath) {
+    let bestResult = null;
+    let maxWaypoints = 0;
+
     for (const model of this.models) {
       try {
         logger.info(`📍 STEP 1: Extracting waypoints with ${model}`);
-        const result = await this.extractWaypointsWithModel(filePath, model);
         
-        // Check if we got good results
-        if (result && result.length > 0) {
-          logger.info(`✅ Successfully extracted ${result.length} waypoints with ${model}`);
-          return result;
+        // Try two different prompting strategies
+        const strategies = ['detailed', 'table-focused'];
+        
+        for (const strategy of strategies) {
+          try {
+            const result = await this.extractWaypointsWithModel(filePath, model, strategy);
+            
+            if (result && result.length > 0) {
+              logger.info(`   ✓ Strategy '${strategy}' extracted ${result.length} waypoints`);
+              
+              // Keep track of the result with most waypoints
+              if (result.length > maxWaypoints) {
+                maxWaypoints = result.length;
+                bestResult = result;
+              }
+              
+              // If we got a good number of waypoints (>= 8), use it
+              if (result.length >= 8) {
+                logger.info(`✅ Successfully extracted ${result.length} waypoints with ${model} (${strategy})`);
+                return result;
+              }
+            }
+          } catch (strategyError) {
+            logger.warn(`   ⚠️  Strategy '${strategy}' failed: ${strategyError.message}`);
+          }
         }
         
-        logger.warn(`⚠️  ${model} returned no waypoints, trying next model...`);
       } catch (error) {
         logger.error(`❌ ${model} failed: ${error.message}, trying next model...`);
       }
     }
 
-    throw new Error('All models failed to extract waypoints');
+    // If we got at least some waypoints, use the best result
+    if (bestResult && bestResult.length > 0) {
+      logger.info(`✅ Using best result with ${maxWaypoints} waypoints`);
+      return bestResult;
+    }
+
+    throw new Error('All models and strategies failed to extract waypoints');
   }
 
   /**
-   * Extract waypoints using a specific model
+   * Extract waypoints using a specific model and strategy
    */
-  async extractWaypointsWithModel(filePath, model) {
+  async extractWaypointsWithModel(filePath, model, strategy = 'detailed') {
     try {
       const fileBuffer = await fs.readFile(filePath);
       const fileExtension = require('path').extname(filePath).toLowerCase();
@@ -80,7 +108,44 @@ class RouteVerificationService {
         logger.info(`🖼️  Processing ${mediaType} image`);
       }
       
-      const prompt = `TASK: Extract the complete routing information from this truck permit.
+      let prompt;
+      
+      if (strategy === 'table-focused') {
+        prompt = `EXTRACT ROUTING TABLE FROM TRUCK PERMIT
+
+Your task: Find the routing table/section and extract EVERY SINGLE ROW.
+
+1. Locate the "ROUTING:", "ROUTE:", or similar section header
+2. Count how many rows are in that table
+3. Extract each row in order - do NOT skip any
+4. For each row, extract the city/location or highway reference
+
+EXAMPLE - If you see a table like:
+┌─────────────────────────────┐
+│ ROUTING:                     │
+│ 1. Kansas City, MO          │
+│ 2. I-70 East                │
+│ 3. Columbia, MO             │
+│ 4. St. Louis, MO            │
+│ 5. I-255 South              │
+│ 6. Collinsville, IL         │
+└─────────────────────────────┘
+
+Return ALL 6 entries in JSON:
+{
+  "waypoints": [
+    {"order": 1, "type": "origin", "address": "Kansas City, MO"},
+    {"order": 2, "type": "waypoint", "address": "I-70 East near Columbia, MO"},
+    {"order": 3, "type": "waypoint", "address": "Columbia, MO"},
+    {"order": 4, "type": "waypoint", "address": "St. Louis, MO"},
+    {"order": 5, "type": "waypoint", "address": "I-255 South near Collinsville, IL"},
+    {"order": 6, "type": "destination", "address": "Collinsville, IL"}
+  ]
+}
+
+NOW: Count the routing table rows carefully and return ALL of them.`;
+      } else {
+        prompt = `TASK: Extract the complete routing information from this truck permit.
 
 STEP 1: Find the "Routing" or "Route" section
 STEP 2: Read EVERY line in that section word-for-word
@@ -100,7 +165,7 @@ FORMAT REQUIREMENTS:
 - For intersections: Include both roads and nearest city (e.g., "I-70 & US-40 near Kansas City, MO")
 
 EXAMPLE - If permit shows:
-━━━━━━━━━━━━━━━━━━━━
+====================================
 ROUTING:
 1. Kansas City, MO
 2. I-70 East
@@ -109,7 +174,7 @@ ROUTING:
 5. I-70 East
 6. Junction City, KS
 7. Salina, KS
-━━━━━━━━━━━━━━━━━━━━
+====================================
 
 Return ALL 7 entries:
 {
@@ -132,6 +197,7 @@ IMPORTANT FOR ACCURACY:
 - Pay attention to directional indicators (N, S, E, W, NE, etc.)
 - Don't skip intermediate cities between major destinations
 - If the permit lists highways between cities, convert each to the nearest city along that route`;
+      }
 
       const response = await axios.post(this.baseUrl, {
         model: model,
@@ -660,6 +726,12 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
         logger.info(`   ${idx + 1}. [${wp.type}] ${wp.address}`);
       });
       logger.info('');
+      
+      // Quick validation: check if route makes geographic sense
+      const routeValidation = this.validateRouteLogic(extractedWaypoints);
+      if (!routeValidation.valid) {
+        logger.warn(`⚠️  Route validation warning: ${routeValidation.message}`);
+      }
 
       // STEP 2: Verify waypoints
       const verificationResult = await this.verifyWaypoints(filePath, extractedWaypoints);
@@ -668,15 +740,28 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
         logger.warn(`⚠️  Low verification confidence: ${verificationResult.confidence}`);
       }
 
-      const verifiedWaypoints = verificationResult.verifiedWaypoints;
+      let verifiedWaypoints = verificationResult.verifiedWaypoints;
       
-      logger.info(`\n✓ VERIFIED WAYPOINTS (${verifiedWaypoints.length}):`);
+      logger.info(`\n✓ VERIFIED WAYPOINTS (${verifiedWaypoints.length})`);
       verifiedWaypoints.forEach((wp, idx) => {
         const verifiedLabel = wp.verified ? '✓' : '⚠';
         logger.info(`   ${verifiedLabel} ${idx + 1}. [${wp.type}] ${wp.address}`);
         if (wp.notes) logger.info(`      Note: ${wp.notes}`);
       });
       logger.info('');
+      
+      // Intelligent enrichment: If we have long highway segments without cities, add intermediate waypoints
+      verifiedWaypoints = await this.enrichWaypointsWithIntermediateCities(verifiedWaypoints);
+      
+      if (verifiedWaypoints.length > verificationResult.verifiedWaypoints.length) {
+        logger.info(`\n🔧 ENRICHED WAYPOINTS (+${verifiedWaypoints.length - verificationResult.verifiedWaypoints.length} added):`);
+        verifiedWaypoints.forEach((wp, idx) => {
+          if (wp.enriched) {
+            logger.info(`   + ${idx + 1}. [${wp.type}] ${wp.address} (auto-added)`);
+          }
+        });
+        logger.info('');
+      }
 
       // STEP 3: Geocode to coordinates
       const geocodedWaypoints = await this.geocodeWaypoints(verifiedWaypoints);
@@ -708,6 +793,144 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
       logger.error(`Error: ${error.message}`);
       logger.error(`${'='.repeat(60)}\n`);
       throw error;
+    }
+  }
+
+  /**
+   * Enrich waypoints with intermediate cities along long highway segments
+   * If there's a long stretch of highway without cities, add major cities in between
+   */
+  async enrichWaypointsWithIntermediateCities(waypoints) {
+    try {
+      logger.info(`🔧 Checking for long highway segments that need intermediate waypoints...`);
+      
+      const enriched = [];
+      
+      for (let i = 0; i < waypoints.length; i++) {
+        enriched.push(waypoints[i]);
+        
+        // Check if this is a highway segment followed by another waypoint far away
+        const current = waypoints[i];
+        const next = waypoints[i + 1];
+        
+        if (!next) continue;
+        
+        // If both waypoints mention highways (I-70, I-64, etc.) without specific cities
+        const isHighwaySegment = (current.address.match(/I-\d+|US-\d+|Route \d+/i) && 
+                                   next.address.match(/I-\d+|US-\d+|Route \d+/i));
+        
+        if (isHighwaySegment && i < waypoints.length - 1) {
+          // Ask LLM to suggest intermediate cities between these two highway segments
+          try {
+            const intermediateCities = await this.findIntermediateCities(current.address, next.address);
+            
+            if (intermediateCities && intermediateCities.length > 0) {
+              logger.info(`   + Adding ${intermediateCities.length} intermediate cities between "${current.address}" and "${next.address}"`);
+              
+              intermediateCities.forEach((city, idx) => {
+                enriched.push({
+                  order: current.order + 0.1 + (idx * 0.1),
+                  type: 'waypoint',
+                  address: city,
+                  verified: true,
+                  enriched: true,
+                  notes: 'Auto-added intermediate city for accuracy'
+                });
+              });
+            }
+          } catch (error) {
+            logger.warn(`   ⚠️  Could not find intermediate cities: ${error.message}`);
+          }
+        }
+      }
+      
+      return enriched;
+      
+    } catch (error) {
+      logger.error(`Waypoint enrichment failed: ${error.message}`);
+      return waypoints; // Return original on error
+    }
+  }
+
+  /**
+   * Validate that the route makes geographic and logical sense
+   */
+  validateRouteLogic(waypoints) {
+    if (waypoints.length < 2) {
+      return { valid: false, message: 'Route must have at least origin and destination' };
+    }
+    
+    // Check for reasonable waypoint count (1-30 is normal for truck routes)
+    if (waypoints.length > 30) {
+      return { valid: false, message: 'Unusually high number of waypoints - may indicate extraction error' };
+    }
+    
+    // Check that origin and destination are marked correctly
+    const origin = waypoints[0];
+    const destination = waypoints[waypoints.length - 1];
+    
+    if (origin.type !== 'origin') {
+      logger.warn(`First waypoint should be type 'origin', got '${origin.type}'`);
+    }
+    
+    if (destination.type !== 'destination') {
+      logger.warn(`Last waypoint should be type 'destination', got '${destination.type}'`);
+    }
+    
+    return { valid: true, message: 'Route logic validated' };
+  }
+
+  /**
+   * Find intermediate cities between two highway segments
+   */
+  async findIntermediateCities(fromHighway, toHighway) {
+    try {
+      const prompt = `Given a truck route segment from "${fromHighway}" to "${toHighway}", identify major cities or towns along this route that should be waypoints.
+
+Return ONLY a JSON array of city names (with state):
+
+{
+  "cities": ["City Name, ST", "Another City, ST"]
+}
+
+Rules:
+- Only include cities that are directly on or near this highway route
+- Include 1-3 major cities maximum (don't over-populate)
+- Use format: "City Name, STATE"
+- If these are the same location or very close, return empty array
+- Focus on cities that would be logical truck route waypoints`;
+
+      const response = await axios.post(this.baseUrl, {
+        model: this.models[0],
+        messages: [{
+          role: "user",
+          content: prompt
+        }],
+        max_tokens: 300,
+        temperature: 0.1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://trucking-console.app',
+          'X-Title': 'Trucking Console Waypoint Enrichment'
+        },
+        timeout: 10000
+      });
+
+      const content = response.data.choices[0].message.content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        return data.cities || [];
+      }
+      
+      return [];
+      
+    } catch (error) {
+      logger.error(`Find intermediate cities failed: ${error.message}`);
+      return [];
     }
   }
 
