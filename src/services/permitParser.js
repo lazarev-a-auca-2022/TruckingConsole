@@ -94,10 +94,14 @@ async function parsePermit(filePath, state = null) {
       }
       
       try {
-        // NEW: Send PDF directly to Claude (no conversion needed!)
-        logger.info('🗺️  Running coordinate verification on PDF document...');
+        // Convert PDF to images for processing (Claude doesn't support PDFs via OpenRouter)
+        logger.info('📸 Converting PDF to images for processing...');
+        const imagePaths = await convertPdfToImages(filePath);
+        const imageDir = path.dirname(imagePaths[0]);
+        
+        logger.info('🗺️  Running coordinate verification on first page...');
         const verificationService = new RouteVerificationService();
-        const verificationResult = await verificationService.processPermitRoute(filePath);
+        const verificationResult = await verificationService.processPermitRoute(imagePaths[0]);
         
         // Store verification result for later use in mapsService
         if (!parsePermit.verificationCache) {
@@ -106,13 +110,17 @@ async function parsePermit(filePath, state = null) {
         parsePermit.verificationCache.set(filePath, verificationResult);
         logger.info(`✅ PDF coordinate verification completed with ${verificationResult.geocodedWaypoints.length} geocoded waypoints`);
         
+        // Clean up temporary images
+        await fs.remove(imageDir);
+        logger.info('🗑️  Cleaned up temporary image files');
+        
         // Use extracted waypoint data as text for AI parser (minimal text extraction)
         const waypointSummary = verificationResult.geocodedWaypoints
           .map(wp => `${wp.address} (${wp.type})`)
           .join('\n');
         
         extractedText = `Route extracted via coordinate verification:\n${waypointSummary}`;
-        logger.info(`✅ Using coordinate-based route data from PDF (no image conversion needed!)`);
+        logger.info(`✅ Using coordinate-based route data from PDF via image processing`);
         
       } catch (pdfError) {
         logger.error(`❌ PDF vision processing failed: ${pdfError.message}`);

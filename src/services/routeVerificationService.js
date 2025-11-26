@@ -102,11 +102,9 @@ Extract FULL city names with states. Be specific and accurate.`;
                 text: prompt
               },
               {
-                type: "document",
-                source: {
-                  type: "base64",
-                  media_type: mediaType,
-                  data: base64Data
+                type: "image_url",
+                image_url: {
+                  url: `data:${mediaType};base64,${base64Data}`
                 }
               }
             ]
@@ -219,11 +217,9 @@ Please verify each waypoint by checking the original image. Return a JSON object
                 text: prompt
               },
               {
-                type: "document",
-                source: {
-                  type: "base64",
-                  media_type: mediaType,
-                  data: base64Data
+                type: "image_url",
+                image_url: {
+                  url: `data:${mediaType};base64,${base64Data}`
                 }
               }
             ]
