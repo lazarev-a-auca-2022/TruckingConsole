@@ -49,47 +49,43 @@ class RouteVerificationService {
         logger.info(`🖼️  Processing ${mediaType} image`);
       }
       
-      const prompt = `Analyze this truck permit document and extract ALL route waypoints, stops, and locations mentioned IN THE EXACT ORDER they appear on the route.
+      const prompt = `You are analyzing a truck oversize/overweight permit. Extract the complete route with ALL waypoints.
 
-CRITICAL INSTRUCTIONS:
-1. Look for the "Routing" or "Route" section of the permit
-2. Extract EVERY city/location mentioned in the route table/list IN ORDER
-3. For each location, provide the full city name with state
-4. Convert highway-only references to the nearest city:
-   - "I-70 E" → Find which city this references (like "Columbia, MO" or "Kansas City, MO")
-   - "Exit 25" → Research the city near that exit
-   - "Route 179" → Find the city along that route
-5. DO NOT include vague locations like "United States"
-6. Ensure waypoints flow geographically (no backtracking)
+INSTRUCTIONS:
+1. Locate the "Routing" or "Route" table/section in the permit
+2. Extract EVERY SINGLE row/entry from that routing table in sequential order
+3. Each row in the routing table is a waypoint - include ALL of them
+4. For each waypoint, extract the city and state (format: "City, ST")
+5. If only a highway/route number is given (like "I-70" or "US-40"), identify the nearest city on that highway in the context of the route
+6. Keep the exact sequence as shown in the permit - do NOT reorder
+7. Do NOT skip entries, do NOT summarize, do NOT combine waypoints
+8. Do NOT add waypoints not explicitly mentioned in the permit
 
-Return ONLY a JSON array of waypoints in order from start to end:
+EXAMPLE:
+If the permit routing table shows:
+Row 1: Kansas City, MO
+Row 2: I-70 E
+Row 3: Columbia, MO  
+Row 4: I-70 E
+Row 5: St. Charles, MO
+Row 6: St. Louis, MO
+Row 7: Collinsville, IL
+
+Then extract ALL 7 entries (convert highway-only rows to nearest cities).
+
+OUTPUT FORMAT - Return ONLY this JSON structure:
 
 {
   "waypoints": [
-    {
-      "order": 1,
-      "type": "origin",
-      "address": "Kansas City, MO"
-    },
-    {
-      "order": 2,
-      "type": "waypoint",
-      "address": "Columbia, MO"
-    },
-    {
-      "order": 3,
-      "type": "waypoint",
-      "address": "St. Louis, MO"
-    },
-    {
-      "order": 4,
-      "type": "destination",
-      "address": "Collinsville, IL"
-    }
+    {"order": 1, "type": "origin", "address": "First City, ST"},
+    {"order": 2, "type": "waypoint", "address": "Second City, ST"},
+    {"order": 3, "type": "waypoint", "address": "Third City, ST"},
+    ...include every waypoint in sequence...
+    {"order": N, "type": "destination", "address": "Last City, ST"}
   ]
 }
 
-Extract FULL city names with states. Be specific and accurate.`;
+Count the routing table rows carefully and include them ALL. Be thorough and complete - this is critical for accurate truck routing.`;
 
       const response = await axios.post(this.baseUrl, {
         model: "anthropic/claude-sonnet-4.5",
@@ -179,12 +175,22 @@ Extract FULL city names with states. Be specific and accurate.`;
         `${idx + 1}. ${wp.type}: ${wp.address}`
       ).join('\n');
 
-      const prompt = `Review this truck permit image and verify the following extracted waypoints are correct:
+      const prompt = `VERIFICATION TASK: Compare the extracted waypoints below with the original permit routing table.
 
-EXTRACTED WAYPOINTS:
+EXTRACTED WAYPOINTS TO VERIFY:
 ${waypointsList}
 
-Please verify each waypoint by checking the original image. Return a JSON object with verification results:
+VERIFICATION CHECKLIST:
+1. Look at the permit's routing section - count how many rows/entries are in the table
+2. Check if we extracted the SAME NUMBER of waypoints as shown in the permit
+3. Verify each waypoint address matches what's written in the permit (row by row)
+4. If any waypoints are missing, incorrect, or out of order, add them to "verifiedWaypoints"
+5. If the extraction missed waypoints, ADD THE MISSING ONES to the list
+6. Maintain the exact sequence from the permit
+
+CRITICAL: If the permit routing table has 10 entries but we only extracted 4, ADD THE 6 MISSING ONES.
+
+Return this JSON structure:
 
 {
   "verified": true,
@@ -192,19 +198,17 @@ Please verify each waypoint by checking the original image. Return a JSON object
     {
       "order": 1,
       "type": "origin",
-      "address": "corrected or confirmed address",
+      "address": "City, ST",
       "verified": true,
-      "notes": "Verified - matches permit" or "Corrected from original extraction"
-    }
+      "notes": "Confirmed correct" OR "Added missing waypoint" OR "Corrected from [old value]"
+    },
+    ...include ALL waypoints that should be in the route...
   ],
-  "issues": [],
+  "issues": ["Description of any problems found"],
   "confidence": 0.95
 }
 
-- Set "verified": true for each waypoint that matches the image
-- Correct any errors in the addresses
-- Add notes about any discrepancies
-- Overall confidence should be 0-1`;
+Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compared to the permit. Add any missing entries.`;
 
       const response = await axios.post(this.baseUrl, {
         model: "anthropic/claude-sonnet-4.5",
@@ -474,13 +478,14 @@ IMPORTANT:
       const origin = validWaypoints.find(wp => wp.type === 'origin') || validWaypoints[0];
       const destination = validWaypoints.find(wp => wp.type === 'destination') || validWaypoints[validWaypoints.length - 1];
       
-      // Get intermediate waypoints and remove duplicates
+      // Get intermediate waypoints
       let intermediateWaypoints = validWaypoints.filter(wp => wp !== origin && wp !== destination);
       
-      // Remove duplicate cities to prevent backtracking
-      intermediateWaypoints = this.removeDuplicateCities(intermediateWaypoints);
+      // Keep all waypoints as specified in the permit - do NOT remove duplicates
+      // Truck permits often specify exact routes that may pass through same cities
+      // intermediateWaypoints = this.removeDuplicateCities(intermediateWaypoints); // DISABLED
       
-      // Ensure waypoints are geographically ordered (no backtracking)
+      // Only minimal backtracking check with very lenient threshold
       intermediateWaypoints = this.ensureGeographicOrder(origin, intermediateWaypoints, destination);
 
       const mapsJson = {
@@ -639,8 +644,8 @@ IMPORTANT:
       );
 
       // Keep waypoint if it's actually between last point and destination
-      // More lenient threshold (2.0 instead of 1.5) to keep more waypoints
-      if (distToWaypoint + distFromWaypointToDest <= directDistance * 2.0) {
+      // Very lenient threshold (3.0x) to preserve waypoints - permits often have specific required routes
+      if (distToWaypoint + distFromWaypointToDest <= directDistance * 3.0) {
         optimized.push(wp);
         lastPoint = wp;
       } else {
