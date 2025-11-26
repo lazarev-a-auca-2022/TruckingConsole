@@ -14,7 +14,6 @@ const { parseIndiana } = require('../parsers/indianaParser');
 const SUPPORTED_STATES = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX'];
 
 /**
- * Convert PDF to PNG images using FREE vision AI
  * @param {string} pdfPath - Path to PDF file
  * @returns {Promise<string[]>} - Array of PNG file paths
  */
@@ -92,7 +91,7 @@ async function parsePermit(filePath, state = null) {
     
     // Determine file type and extract text accordingly
     if (fileExtension === '.pdf') {
-      logger.info('Processing PDF file with FREE AI Vision...');
+      logger.info('Processing PDF file with AI vision...');
       
       if (!process.env.OPENROUTER_API_KEY) {
         throw new Error('OpenRouter API key is required for PDF processing. Please set OPENROUTER_API_KEY in docker-compose.yml');

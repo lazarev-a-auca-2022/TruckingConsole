@@ -11,7 +11,7 @@ class OpenRouterOCR {
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    this.model = process.env.AI_MODEL || 'meta-llama/llama-3.2-90b-vision-instruct:free';
+    this.model = process.env.AI_MODEL || 'anthropic/claude-sonnet-4.5';
     this.templateAnalysis = new Map(); // Cache template analysis
     logger.info(`OpenRouter OCR initialized with model: ${this.model}`);
   }
@@ -174,7 +174,7 @@ Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792p
       logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5",  // Free vision model alternative
+        model: "anthropic/claude-sonnet-4.5",  
         messages: [
           {
             role: "user",

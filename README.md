@@ -4,7 +4,6 @@ Multi-state truck permit parser with AI vision capabilities for extracting route
 
 ## Features
 
-<<<<<<< HEAD
 - **Web Interface**: Simple file upload with drag-and-drop support
 - **OCR Processing**: Extract text from PNG, JPG, JPEG, GIF, BMP, TIFF, WEBP images
 - **PDF Support**: Parse PDF permit files from multiple states
@@ -15,13 +14,6 @@ Multi-state truck permit parser with AI vision capabilities for extracting route
 - **Google Maps Integration**: Generate Google Maps URLs for navigation with coordinates
 - **Console Interface**: Command-line tools for batch processing
 - **Docker Deployment**: Ready for remote server deployment
-=======
-- **AI Vision Parsing**: Uses free Llama 3.2 Vision models to read routing tables from PDFs
-- **Multi-State Support**: IL, WI, MO, ND, IN, VA, TX
-- **Auto PDF→Image**: Converts PDFs to images for vision AI processing
-- **GPX Export**: Generates routes for navigation apps
-- **MongoDB Storage**: Caches parsed routes
->>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
 
 ## Quick Deploy (Linux Server)
 
@@ -54,7 +46,7 @@ Edit `docker-compose.yml`:
 ```yaml
 environment:
   - OPENROUTER_API_KEY=sk-or-v1-your-key-here  # Replace with your key
-  - AI_MODEL=meta-llama/llama-3.2-90b-vision-instruct:free  # Best accuracy
+  - AI_MODEL=anthropic/claude-sonnet-4.5  # Best accuracy
   - USE_AI_PARSER=true
 ```
 
@@ -118,7 +110,6 @@ docker exec $(docker ps -q -f name=app) env | grep OPENROUTER
 docker exec $(docker ps -q -f name=app) which convert
 ```
 
-<<<<<<< HEAD
 ### Required
 - `OPENROUTER_API_KEY` - **Required** for image OCR and route verification
 
@@ -128,19 +119,6 @@ docker exec $(docker ps -q -f name=app) which convert
 - `MONGODB_URI` - MongoDB connection string
 - `GOOGLE_MAPS_API_KEY` - Google Maps API key (recommended for accurate geocoding)
 - `LOG_LEVEL` - Logging level (debug/info/warn/error)
-=======
-**Rate limits (free tier):**
-- Limit: ~10-20 requests/minute
-- Solution: Wait 60s between requests
-
-## Tech Stack
-
-- **Backend**: Node.js, Express
-- **Database**: MongoDB
-- **AI**: OpenRouter (Llama 3.2 Vision, free tier)
-- **PDF Processing**: pdf-to-png-converter, ImageMagick
-- **Deployment**: Docker, docker-compose
->>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
 
 ## File Structure
 

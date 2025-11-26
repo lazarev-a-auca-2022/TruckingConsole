@@ -9,9 +9,9 @@ class AIPermitParser {
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    // Use FREE Llama 3.2 Vision model (best free option with vision)
-    this.model = process.env.AI_MODEL || 'meta-llama/llama-3.2-90b-vision-instruct:free';
-    logger.info(`AI Parser initialized with FREE model: ${this.model}`);
+    // Use Claude Sonnet 4.5 model (best free option with vision)
+    this.model = process.env.AI_MODEL || 'anthropic/claude-sonnet-4.5';
+    logger.info(`AI Parser initialized with model: ${this.model}`);
   }
 
   /**
