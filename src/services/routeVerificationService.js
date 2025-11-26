@@ -18,24 +18,49 @@ class RouteVerificationService {
   }
 
   /**
-   * STEP 1: Extract waypoints/route points from permit image
+   * STEP 1: Extract waypoints/route points from permit (PDF or image)
    * Returns street addresses/location names
    */
-  async extractWaypoints(imagePath) {
+  async extractWaypoints(filePath) {
     try {
-      logger.info(`📍 STEP 1: Extracting waypoints from image: ${imagePath}`);
+      logger.info(`📍 STEP 1: Extracting waypoints from: ${filePath}`);
       
-      const imageBuffer = await fs.readFile(imagePath);
-      const base64Image = imageBuffer.toString('base64');
+      const fileBuffer = await fs.readFile(filePath);
+      const fileExtension = require('path').extname(filePath).toLowerCase();
       
-      const prompt = `Analyze this truck permit image and extract ALL route waypoints, stops, and locations mentioned.
+      // Determine media type and prepare content
+      let mediaType, base64Data;
+      
+      if (fileExtension === '.pdf') {
+        mediaType = 'application/pdf';
+        base64Data = fileBuffer.toString('base64');
+        logger.info('📄 Processing PDF document directly with Claude');
+      } else {
+        // Image file
+        const imageTypes = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp'
+        };
+        mediaType = imageTypes[fileExtension] || 'image/png';
+        base64Data = fileBuffer.toString('base64');
+        logger.info(`🖼️  Processing ${mediaType} image`);
+      }
+      
+      const prompt = `Analyze this truck permit document and extract ALL route waypoints, stops, and locations mentioned IN THE EXACT ORDER they appear on the route.
 
-Focus on:
-- Origin/starting point address
-- Destination/ending point address  
-- All intermediate stops, waypoints, or cities along the route
-- Street names, highway numbers, intersections
-- Any specific locations mentioned (terminals, facilities, etc.)
+CRITICAL INSTRUCTIONS:
+1. Look for the "Routing" or "Route" section of the permit
+2. Extract EVERY city/location mentioned in the route table/list IN ORDER
+3. For each location, provide the full city name with state
+4. Convert highway-only references to the nearest city:
+   - "I-70 E" → Find which city this references (like "Columbia, MO" or "Kansas City, MO")
+   - "Exit 25" → Research the city near that exit
+   - "Route 179" → Find the city along that route
+5. DO NOT include vague locations like "United States"
+6. Ensure waypoints flow geographically (no backtracking)
 
 Return ONLY a JSON array of waypoints in order from start to end:
 
@@ -44,22 +69,27 @@ Return ONLY a JSON array of waypoints in order from start to end:
     {
       "order": 1,
       "type": "origin",
-      "address": "123 Main St, Chicago, IL"
+      "address": "Kansas City, MO"
     },
     {
       "order": 2,
       "type": "waypoint",
-      "address": "Route 66 & Interstate 55, Springfield, IL"
+      "address": "Columbia, MO"
     },
     {
       "order": 3,
+      "type": "waypoint",
+      "address": "St. Louis, MO"
+    },
+    {
+      "order": 4,
       "type": "destination",
-      "address": "456 Industrial Blvd, St. Louis, MO"
+      "address": "Collinsville, IL"
     }
   ]
 }
 
-Extract as much detail as possible. Include full addresses with street names, cities, and states.`;
+Extract FULL city names with states. Be specific and accurate.`;
 
       const response = await axios.post(this.baseUrl, {
         model: "anthropic/claude-sonnet-4.5",
@@ -72,9 +102,11 @@ Extract as much detail as possible. Include full addresses with street names, ci
                 text: prompt
               },
               {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/png;base64,${base64Image}`
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Data
                 }
               }
             ]
@@ -119,15 +151,31 @@ Extract as much detail as possible. Include full addresses with street names, ci
   }
 
   /**
-   * STEP 2: Verify extracted waypoints against original image
-   * Double-checks that the extracted waypoints match what's in the image
+   * STEP 2: Verify extracted waypoints against original document
+   * Double-checks that the extracted waypoints match what's in the document
    */
-  async verifyWaypoints(imagePath, extractedWaypoints) {
+  async verifyWaypoints(filePath, extractedWaypoints) {
     try {
-      logger.info(`🔍 STEP 2: Verifying ${extractedWaypoints.length} waypoints against original image`);
+      logger.info(`🔍 STEP 2: Verifying ${extractedWaypoints.length} waypoints against original document`);
       
-      const imageBuffer = await fs.readFile(imagePath);
-      const base64Image = imageBuffer.toString('base64');
+      const fileBuffer = await fs.readFile(filePath);
+      const fileExtension = require('path').extname(filePath).toLowerCase();
+      
+      let mediaType, base64Data;
+      if (fileExtension === '.pdf') {
+        mediaType = 'application/pdf';
+        base64Data = fileBuffer.toString('base64');
+      } else {
+        const imageTypes = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp'
+        };
+        mediaType = imageTypes[fileExtension] || 'image/png';
+        base64Data = fileBuffer.toString('base64');
+      }
       
       const waypointsList = extractedWaypoints.map((wp, idx) => 
         `${idx + 1}. ${wp.type}: ${wp.address}`
@@ -171,9 +219,11 @@ Please verify each waypoint by checking the original image. Return a JSON object
                 text: prompt
               },
               {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/png;base64,${base64Image}`
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Data
                 }
               }
             ]
@@ -475,22 +525,22 @@ IMPORTANT:
   /**
    * Complete workflow: Extract → Verify → Geocode → Generate JSON
    */
-  async processPermitRoute(imagePath) {
+  async processPermitRoute(filePath) {
     try {
       logger.info(`\n${'='.repeat(60)}`);
       logger.info(`🚛 ROUTE VERIFICATION WORKFLOW STARTED`);
-      logger.info(`Image: ${imagePath}`);
+      logger.info(`File: ${filePath}`);
       logger.info(`${'='.repeat(60)}\n`);
 
       // STEP 1: Extract waypoints
-      const extractedWaypoints = await this.extractWaypoints(imagePath);
+      const extractedWaypoints = await this.extractWaypoints(filePath);
       
       if (extractedWaypoints.length === 0) {
-        throw new Error('No waypoints could be extracted from the permit image');
+        throw new Error('No waypoints could be extracted from the permit document');
       }
 
       // STEP 2: Verify waypoints
-      const verificationResult = await this.verifyWaypoints(imagePath, extractedWaypoints);
+      const verificationResult = await this.verifyWaypoints(filePath, extractedWaypoints);
       
       if (!verificationResult.verified && verificationResult.confidence < 0.5) {
         logger.warn(`⚠️  Low verification confidence: ${verificationResult.confidence}`);

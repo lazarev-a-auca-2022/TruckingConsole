@@ -87,21 +87,17 @@ async function parsePermit(filePath, state = null) {
     
     // Determine file type and extract text accordingly
     if (fileExtension === '.pdf') {
-      logger.info('Processing PDF file with AI vision and coordinate verification...');
+      logger.info('📄 Processing PDF directly with Claude Sonnet 4.5 (PDF native support)...');
       
       if (!process.env.OPENROUTER_API_KEY) {
         throw new Error('OpenRouter API key is required for PDF processing. Please set OPENROUTER_API_KEY in docker-compose.yml');
       }
       
       try {
-        // Convert PDF to images first
-        const imagePages = await convertPdfToImages(filePath);
-        logger.info(`Processing ${imagePages.length} PDF pages with AI vision`);
-        
-        // NEW: Use RouteVerificationService on first page for coordinate extraction
-        logger.info('🗺️  Running coordinate verification on PDF page 1...');
+        // NEW: Send PDF directly to Claude (no conversion needed!)
+        logger.info('🗺️  Running coordinate verification on PDF document...');
         const verificationService = new RouteVerificationService();
-        const verificationResult = await verificationService.processPermitRoute(imagePages[0]);
+        const verificationResult = await verificationService.processPermitRoute(filePath);
         
         // Store verification result for later use in mapsService
         if (!parsePermit.verificationCache) {
@@ -110,18 +106,13 @@ async function parsePermit(filePath, state = null) {
         parsePermit.verificationCache.set(filePath, verificationResult);
         logger.info(`✅ PDF coordinate verification completed with ${verificationResult.geocodedWaypoints.length} geocoded waypoints`);
         
-        // Clean up temporary image files
-        const imageDir = path.dirname(imagePages[0]);
-        await fs.remove(imageDir);
-        logger.info('✅ Cleaned up temporary PDF images');
-        
         // Use extracted waypoint data as text for AI parser (minimal text extraction)
         const waypointSummary = verificationResult.geocodedWaypoints
           .map(wp => `${wp.address} (${wp.type})`)
           .join('\n');
         
         extractedText = `Route extracted via coordinate verification:\n${waypointSummary}`;
-        logger.info(`✅ Using coordinate-based route data (skipped full text extraction to save API calls)`);
+        logger.info(`✅ Using coordinate-based route data from PDF (no image conversion needed!)`);
         
       } catch (pdfError) {
         logger.error(`❌ PDF vision processing failed: ${pdfError.message}`);
