@@ -3,11 +3,25 @@ const { getCachedRouteData } = require('./pngConverter');
 
 /**
  * Generate Google Maps URL from route data
+ * NOW USES COORDINATES instead of addresses
  */
 async function generateMapsUrl(routeData) {
   try {
-    if (!routeData || !routeData.parseResult) {
+    if (!routeData) {
       throw new Error('Invalid route data provided');
+    }
+    
+    // NEW: Check if we have verification data with coordinates
+    if (routeData.mapsJson) {
+      logger.info('✅ Using NEW coordinate-based Maps URL generation');
+      return generateMapsUrlFromCoordinates(routeData.mapsJson);
+    }
+    
+    // FALLBACK: Old address-based method
+    logger.warn('⚠️  Using fallback address-based Maps URL (no coordinates available)');
+    
+    if (!routeData.parseResult) {
+      throw new Error('No parseResult in route data');
     }
     
     const { parseResult } = routeData;
@@ -77,6 +91,52 @@ async function generateMapsUrl(routeData) {
 }
 
 /**
+ * Generate Google Maps URL from coordinates (NEW METHOD)
+ * Uses lat/lng coordinates instead of addresses
+ */
+function generateMapsUrlFromCoordinates(mapsJson) {
+  try {
+    const { origin, destination, waypoints } = mapsJson;
+    
+    if (!origin || !destination) {
+      throw new Error('Origin and destination coordinates are required');
+    }
+    
+    // Format: https://www.google.com/maps/dir/?api=1&origin=lat,lng&destination=lat,lng&waypoints=lat,lng|lat,lng
+    let mapsUrl = 'https://www.google.com/maps/dir/?api=1';
+    
+    // Add origin coordinates
+    mapsUrl += `&origin=${origin.lat},${origin.lng}`;
+    
+    // Add destination coordinates
+    mapsUrl += `&destination=${destination.lat},${destination.lng}`;
+    
+    // Add intermediate waypoints (up to 25 total)
+    if (waypoints && waypoints.length > 0) {
+      const limitedWaypoints = waypoints.slice(0, 23); // Leave room for origin/destination
+      const waypointString = limitedWaypoints
+        .map(wp => `${wp.lat},${wp.lng}`)
+        .join('|');
+      mapsUrl += `&waypoints=${waypointString}`;
+    }
+    
+    // Add travel mode
+    mapsUrl += '&travelmode=driving';
+    
+    logger.info(`✅ Generated coordinate-based Maps URL`);
+    logger.info(`   Origin: ${origin.lat}, ${origin.lng}`);
+    logger.info(`   Destination: ${destination.lat}, ${destination.lng}`);
+    logger.info(`   Waypoints: ${waypoints?.length || 0}`);
+    
+    return mapsUrl;
+    
+  } catch (error) {
+    logger.error(`Coordinate-based Maps URL generation error: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Generate Google Maps URL from route ID (for API endpoint)
  */
 async function generateMapsUrlById(routeId) {
@@ -137,5 +197,6 @@ async function geocodeAddress(address) {
 module.exports = {
   generateMapsUrl,
   generateMapsUrlById,
-  geocodeAddress
+  geocodeAddress,
+  generateMapsUrlFromCoordinates
 };

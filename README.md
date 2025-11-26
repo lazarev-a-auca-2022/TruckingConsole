@@ -7,9 +7,11 @@ A console-only application for parsing truck permit PDF files and converting the
 - **Web Interface**: Simple file upload with drag-and-drop support
 - **OCR Processing**: Extract text from PNG, JPG, JPEG, GIF, BMP, TIFF, WEBP images
 - **PDF Support**: Parse PDF permit files from multiple states
+- **Route Verification**: NEW! Double-check waypoint extraction with verification workflow
+- **Coordinate-Based Routing**: Uses GPS coordinates (lat/lng) instead of street addresses
 - **PNG Conversion**: Generate standardized converted PNG permits
 - **Route Export**: Export routes as GPX files for Garmin devices
-- **Google Maps Integration**: Generate Google Maps URLs for navigation
+- **Google Maps Integration**: Generate Google Maps URLs for navigation with coordinates
 - **Console Interface**: Command-line tools for batch processing
 - **Docker Deployment**: Ready for remote server deployment
 
@@ -94,10 +96,14 @@ node src/index.js server --port 3000
 
 ## Environment Variables
 
+### Required
+- `OPENROUTER_API_KEY` - **Required** for image OCR and route verification
+
+### Optional
 - `NODE_ENV` - Environment (development/production)
 - `PORT` - Server port (default: 3000)
 - `MONGODB_URI` - MongoDB connection string
-- `GOOGLE_MAPS_API_KEY` - Google Maps API key
+- `GOOGLE_MAPS_API_KEY` - Google Maps API key (recommended for accurate geocoding)
 - `LOG_LEVEL` - Logging level (debug/info/warn/error)
 
 ## File Structure
@@ -117,9 +123,31 @@ src/
 
 The application includes a Dockerfile for easy deployment on remote servers.
 
+## Route Verification Workflow (NEW!)
+
+For image permits (PNG, JPG, etc.), the system now uses a 4-step verification process:
+
+1. **Extract Waypoints** - LLM reads permit image and extracts all route points
+2. **Verify Waypoints** - LLM re-reads image to double-check extracted waypoints
+3. **Geocode to Coordinates** - Converts addresses to GPS coordinates (lat/lng)
+4. **Generate Maps JSON** - Creates Google Maps compatible JSON with coordinates
+
+See [ROUTE_VERIFICATION.md](ROUTE_VERIFICATION.md) for detailed documentation.
+
+### Test Route Verification
+
+```bash
+node test-route-verification.js
+```
+
 ## Testing
 
 Run tests:
 ```bash
 npm test
+```
+
+Test route verification workflow:
+```bash
+node test-route-verification.js
 ```
