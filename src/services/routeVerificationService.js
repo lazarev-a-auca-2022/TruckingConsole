@@ -348,7 +348,13 @@ Return ONLY a JSON object with coordinates:
   "formatted_address": "Chicago, IL, USA"
 }
 
-Provide the most accurate coordinates possible based on your knowledge. If the exact address is not known, provide coordinates for the general area (city/intersection).`;
+IMPORTANT: 
+- Provide the most accurate coordinates possible based on your knowledge
+- For highway intersections or exits, find the nearest city and use those coordinates
+- For "I-70 E" → find a specific city along I-70 (like "Columbia, MO")
+- For "Exit 25" → research which city that exit is near
+- NEVER return just "United States" or "USA" - always include a specific city and state
+- If you can't find exact location, use the nearest major city along the route`;
 
       const response = await axios.post(this.baseUrl, {
         model: "anthropic/claude-sonnet-4.5",
@@ -382,6 +388,14 @@ Provide the most accurate coordinates possible based on your knowledge. If the e
       
       if (!coordinates.lat || !coordinates.lng) {
         throw new Error('Invalid coordinates in response');
+      }
+
+      // Validate that we got a real location, not just "United States"
+      const formattedAddr = coordinates.formatted_address || '';
+      if (formattedAddr.toLowerCase() === 'united states' || 
+          formattedAddr.toLowerCase() === 'usa' ||
+          !formattedAddr.includes(',')) {
+        throw new Error(`Geocoding returned vague location: ${formattedAddr}`);
       }
 
       return coordinates;
@@ -579,17 +593,17 @@ Provide the most accurate coordinates possible based on your knowledge. If the e
       );
 
       // Keep waypoint if it's actually between last point and destination
-      // (not causing backtracking)
-      if (distToWaypoint + distFromWaypointToDest <= directDistance * 1.5) {
+      // More lenient threshold (2.0 instead of 1.5) to keep more waypoints
+      if (distToWaypoint + distFromWaypointToDest <= directDistance * 2.0) {
         optimized.push(wp);
         lastPoint = wp;
       } else {
-        logger.info(`   ⚠️  Removed backtracking waypoint: ${wp.address}`);
+        logger.info(`   ⚠️  Removed backtracking waypoint: ${wp.address} (adds ${((distToWaypoint + distFromWaypointToDest - directDistance)).toFixed(0)} extra miles)`);
       }
     }
 
     const optimizedDistance = this.calculateTotalDistance([origin, ...optimized, destination]);
-    logger.info(`   ✅ Route optimization: ${currentDistance.toFixed(0)}mi → ${optimizedDistance.toFixed(0)}mi`);
+    logger.info(`   ✅ Route optimization: ${currentDistance.toFixed(0)}mi → ${optimizedDistance.toFixed(0)}mi (kept ${optimized.length}/${waypoints.length} waypoints)`);
 
     return optimized;
   }
