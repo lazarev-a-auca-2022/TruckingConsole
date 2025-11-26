@@ -11,7 +11,97 @@ class OpenRouterOCR {
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    this.model = process.env.AI_MODEL || 'meta-llama/llama-3.2-90b-vision-instruct:free';
     this.templateAnalysis = new Map(); // Cache template analysis
+    logger.info(`OpenRouter OCR initialized with model: ${this.model}`);
+  }
+
+  /**
+   * Detect the state/issuing authority from a permit document
+   */
+  async detectState(permitPath) {
+    try {
+      logger.info(`Detecting state from permit: ${permitPath}`);
+      
+      if (!this.apiKey) {
+        throw new Error('OpenRouter API key is required for state detection');
+      }
+
+      // Read and encode permit image
+      const imageBuffer = await fs.readFile(permitPath);
+      const base64Image = imageBuffer.toString('base64');
+      
+      const prompt = `Analyze this truck permit document and determine which US state issued it.
+
+Look for:
+- State name or abbreviation (IL, WI, MO, ND, IN, VA, etc.)
+- Department of Transportation logos/headers
+- Official state seals or letterheads
+- Address information showing state
+- Any text indicating issuing authority
+
+Return ONLY the two-letter state code (e.g., "IL", "WI", "MO", "ND", "IN", "VA") based on which state issued this permit.
+
+If you cannot determine the state with confidence, return "UNKNOWN".`;
+
+      logger.info('Making state detection API request to OpenRouter');
+      
+      const response = await axios.post(this.baseUrl, {
+        model: this.model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { 
+                type: 'image_url', 
+                image_url: { 
+                  url: `data:image/png;base64,${base64Image}` 
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://trucking-console.app',
+          'X-Title': 'Trucking Console State Detection'
+        }
+      });
+
+      if (!response.data.choices || !response.data.choices[0]) {
+        throw new Error('No response from OpenRouter API');
+      }
+
+      const detectedState = response.data.choices[0].message.content.trim().toUpperCase();
+      
+      // Validate the detected state
+      const validStates = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA'];
+      const finalState = validStates.includes(detectedState) ? detectedState : 'UNKNOWN';
+      
+      logger.info(`State detection result: ${finalState}`);
+      return finalState;
+
+    } catch (error) {
+      logger.error(`State detection failed: ${error.message}`);
+      
+      // Try to guess from filename as fallback
+      const filename = path.basename(permitPath).toUpperCase();
+      const validStates = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA'];
+      
+      for (const state of validStates) {
+        if (filename.includes(state)) {
+          logger.info(`Fallback: detected state ${state} from filename`);
+          return state;
+        }
+      }
+      
+      return 'UNKNOWN';
+    }
   }
 
   /**
@@ -80,11 +170,19 @@ Look for fields like:
 Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792px).`;
 
       logger.info(`Making API request to: ${this.baseUrl}`);
+<<<<<<< HEAD
       logger.info(`Request model: anthropic/claude-sonnet-4.5`);
       logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
 
       const response = await axios.post(this.baseUrl, {
         model: "anthropic/claude-sonnet-4.5",  // Free vision model alternative
+=======
+      logger.info(`Request model: ${this.model}`);
+      logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
+
+      const response = await axios.post(this.baseUrl, {
+        model: this.model,
+>>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
         messages: [
           {
             role: "user",
@@ -189,7 +287,11 @@ Please return a JSON object with the extracted text mapped to field names:
 Focus on accuracy - only include text you're confident about. Leave fields empty if uncertain.`;
 
       const response = await axios.post(this.baseUrl, {
+<<<<<<< HEAD
         model: "anthropic/claude-sonnet-4.5", 
+=======
+        model: this.model,
+>>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
         messages: [
           {
             role: "user",
@@ -368,7 +470,7 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
       const prompt = `Extract ALL visible text from this permit image. Return only the raw text without any formatting or structure. Include company names, addresses, numbers, dates, and any other text you can see.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "openai/gpt-4o-mini",
+        model: this.model,
         messages: [
           {
             role: "user",
@@ -404,6 +506,13 @@ Focus on accuracy - only include text you're confident about. Leave fields empty
 
     } catch (error) {
       logger.error(`Raw text extraction failed: ${error.message}`);
+      
+      // If 402 error, provide helpful message
+      if (error.response?.status === 402) {
+        logger.error('OpenRouter API key has no credits. Please add credits or use a valid API key.');
+        throw new Error('API credits required. Please add credits to your OpenRouter account.');
+      }
+      
       throw error;
     }
   }

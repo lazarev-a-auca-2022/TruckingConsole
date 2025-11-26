@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 
-# Install system dependencies for canvas and sharp
+# Install system dependencies for canvas and sharp + ImageMagick for PDF conversion
 RUN apk add --no-cache \
     python3 \
     make \
@@ -17,7 +17,9 @@ RUN apk add --no-cache \
     cairo-dev \
     pango-dev \
     jpeg-dev \
-    giflib-dev
+    giflib-dev \
+    imagemagick \
+    ghostscript
 
 # Install Node.js dependencies
 RUN npm install --only=production
@@ -29,17 +31,13 @@ RUN npm install --verbose --timeout=300000 sharp
 COPY src/ ./src/
 COPY public/ ./public/
 COPY outputs/ ./outputs/
-COPY debug-png.js ./
-COPY quick-test.js ./
-COPY container-test.js ./
-COPY simple-test.js ./
-COPY route-test.js ./
-COPY complete-test.js ./
-COPY test-openrouter-ocr.js ./
 COPY .env.example ./
 
-# Create uploads directory
-RUN mkdir -p uploads temp
+# Create required directories
+RUN mkdir -p uploads temp tests
+
+# Copy tests (optional - for container testing)
+COPY tests/ ./tests/
 
 # Expose port
 EXPOSE 3000

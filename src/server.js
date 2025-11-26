@@ -3,9 +3,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const { parsePermit } = require('./services/permitParser');
-const { generateMapsUrlById } = require('./services/mapsService');
+const { generateMapsUrlById, cacheRouteData } = require('./services/mapsService');
 const { generateGpxById } = require('./services/gpxService');
-const { generateConvertedPng, generateConvertedPngById, getCachedRouteData, cacheRouteData } = require('./services/pngConverter');
 const { connectDatabase } = require('./config/database');
 const logger = require('./utils/logger');
 
@@ -71,15 +70,22 @@ app.get('/', (req, res) => {
 
 app.get('/api', (req, res) => {
   res.json({
-    message: 'Trucking Console API',
+    message: 'Trucking Console API - Route Parsing & Google Maps Integration',
     version: '1.0.0',
+    description: 'Parse trucking permits and convert route data into Google Maps URLs and GPX files',
     endpoints: [
-      'POST /api/parse - Upload and parse permit file (PDF or image)',
-      'GET /api/routes/:id - Get parsed route details',
-      'GET /api/maps-url/:id - Get Google Maps URL',
-      'GET /api/gpx/:id - Download GPX file',
-      'GET /api/convert-png/:id - Download converted PNG'
-    ]
+      'POST /api/parse - Upload and parse permit file (PDF or image) - Auto-detects state using AI',
+      'GET /api/maps-url/:id - Get Google Maps URL for the route',
+      'GET /api/gpx/:id - Download GPX file for Garmin navigation'
+    ],
+    workflow: [
+      '1. Upload permit document (PDF or image)',
+      '2. AI automatically detects the issuing state',
+      '3. Extract route data (start/end points, waypoints, restrictions)',
+      '4. Generate Google Maps URL with all route points',
+      '5. Export GPX file for Garmin/navigation devices'
+    ],
+  supportedStates: ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX']
   });
 });
 
@@ -91,27 +97,22 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     }
 
     const { state } = req.body;
-    if (!state) {
-      return res.status(400).json({ error: 'State parameter is required' });
-    }
-
-    logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state}`);
+    
+    logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state || 'auto-detect'}`);
     tempFilePath = req.file.path;
 
     const result = await parsePermit(req.file.path, state);
     
-    // Cache the route data for PNG conversion (including original file path)
-    cacheRouteData(result.routeId, {
-      ...result,
-      originalImagePath: req.file.path // Keep path for OpenRouter OCR
-    });
+    // Cache the route data for later Maps URL generation
+    cacheRouteData(result.routeId, result);
     
-    // Note: Don't clean up file immediately - needed for PNG generation
-    // File will be cleaned up after PNG generation or on server restart
+    // Clean up uploaded file after processing
+    await fs.remove(tempFilePath).catch(() => {});
     
     res.json({
       success: true,
       data: result,
+      message: 'Permit parsed successfully. Route data extracted and ready for Google Maps integration.',
       timestamp: new Date().toISOString()
     });
 
@@ -133,14 +134,14 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
 app.get('/api/maps-url/:routeId', async (req, res) => {
   try {
     const { routeId } = req.params;
-    // In a real implementation, you'd fetch route data from database
-    // For now, we'll return a placeholder
     const mapsUrl = await generateMapsUrlById(routeId);
     
     res.json({
       success: true,
       mapsUrl,
-      routeId
+      routeId,
+      message: 'Google Maps URL generated successfully. Click the URL to view route in Google Maps.',
+      instructions: 'Copy this URL to open the route in Google Maps or share with drivers.'
     });
 
   } catch (error) {
@@ -152,154 +153,6 @@ app.get('/api/maps-url/:routeId', async (req, res) => {
   }
 });
 
-// Test endpoint for PNG generation
-app.get('/api/test-png', async (req, res) => {
-  try {
-    logger.info('=== TEST PNG ENDPOINT ===');
-    
-    // Use a hardcoded working PNG for testing
-    const testPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAABYSURBVBiVY/z//z8DJQAggBhJVQwQQIykKgYIIEZSFQMEECOpigECiJFUxQABxEiqYoAAYiRVMUAAMZKqGCCAGElVDBBAjKQqBgggRlIVAwQQI6mKAQKIEQCZvQQhPE9+TgAAAABJRU5ErkJggg==';
-    const testPng = Buffer.from(testPngBase64, 'base64');
-    
-    logger.info(`Test PNG generated: ${testPng.length} bytes`);
-    logger.info(`PNG signature: ${testPng.slice(0, 8).toString('hex')}`);
-    
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Length': testPng.length,
-      'Content-Disposition': 'attachment; filename="test.png"',
-      'Cache-Control': 'no-cache'
-    });
-    
-    res.send(testPng);
-    logger.info('Test PNG sent successfully');
-    
-  } catch (error) {
-    logger.error(`Test PNG error: ${error.message}`);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Debug endpoint that bypasses all PNG generation
-app.get('/api/debug-png', async (req, res) => {
-  try {
-    logger.info('=== DEBUG PNG ENDPOINT ===');
-    
-    // Create a simple text-based "PNG" for debugging
-    const debugText = `Debug PNG - Route: debug123 - State: IL - Time: ${new Date().toISOString()}`;
-    
-    // Convert to a simple working PNG
-    const simplePngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAALhSURBVHja7d1NaxNBGAbgNxGFWkSw1YK01Q/wUFvBg1pQwYMHL168ePHgxYsXL168ePHgxYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168ePHixYsXL168eAEA';
-    const debugPng = Buffer.from(simplePngBase64, 'base64');
-    
-    logger.info(`Debug PNG: ${debugPng.length} bytes`);
-    logger.info(`Debug text: ${debugText}`);
-    
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Length': debugPng.length,
-      'Content-Disposition': 'attachment; filename="debug.png"'
-    });
-    
-    res.send(debugPng);
-    logger.info('Debug PNG sent successfully');
-    
-  } catch (error) {
-    logger.error(`Debug PNG error: ${error.message}`);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/convert-png/:routeId', async (req, res) => {
-  const startTime = Date.now();
-  
-  // Add console.log for immediate debugging
-  console.log('🔥 PNG CONVERSION REQUEST RECEIVED');
-  console.log('🔥 Route ID:', req.params.routeId);
-  console.log('🔥 Headers:', req.headers);
-  
-  try {
-    const { routeId } = req.params;
-    logger.info(`=== PNG CONVERSION REQUEST START ===`);
-    logger.info(`Route ID: ${routeId}`);
-    logger.info(`Request IP: ${req.ip}`);
-    logger.info(`User Agent: ${req.get('User-Agent')}`);
-    
-    console.log('🔥 Starting PNG generation...');
-    
-    // Try to get cached route data first
-    const cachedData = getCachedRouteData(routeId);
-    let pngData;
-    
-    if (cachedData) {
-      console.log('🔥 Found cached data');
-      logger.info('✅ Found cached route data');
-      logger.info(`Cached data keys: ${Object.keys(cachedData)}`);
-      pngData = await generateConvertedPng(cachedData);
-    } else {
-      console.log('🔥 No cached data, using placeholder');
-      logger.info('⚠️  No cached data found, using placeholder');
-      pngData = await generateConvertedPngById(routeId);
-    }
-    
-    console.log('🔥 PNG generation completed:', pngData ? pngData.length : 'null', 'bytes');
-    
-    if (!pngData) {
-      throw new Error('PNG generation returned null/undefined');
-    }
-    
-    if (!Buffer.isBuffer(pngData)) {
-      logger.error(`PNG data is not a buffer: ${typeof pngData}`);
-      throw new Error('PNG data is not a valid buffer');
-    }
-    
-    if (pngData.length === 0) {
-      throw new Error('Generated PNG data is empty');
-    }
-    
-    logger.info(`✅ PNG generated successfully: ${pngData.length} bytes`);
-    logger.info(`PNG starts with: ${pngData.slice(0, 8).toString('hex')}`);
-    
-    console.log('🔥 Setting response headers...');
-    
-    // Set response headers
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Length': pngData.length,
-      'Content-Disposition': `attachment; filename="converted_permit_${routeId}.png"`,
-      'Cache-Control': 'no-cache',
-      'Access-Control-Allow-Origin': '*'
-    });
-    
-    console.log('🔥 Sending PNG response...');
-    logger.info(`📤 Sending PNG response...`);
-    
-    // Send the PNG data
-    res.send(pngData);
-    
-    const endTime = Date.now();
-    console.log('🔥 PNG response sent successfully in', endTime - startTime, 'ms');
-    logger.info(`✅ PNG response sent successfully in ${endTime - startTime}ms`);
-    logger.info(`=== PNG CONVERSION REQUEST END ===`);
-
-  } catch (error) {
-    const endTime = Date.now();
-    console.log('🔥 PNG CONVERSION ERROR:', error.message);
-    console.log('🔥 Error stack:', error.stack);
-    
-    logger.error(`❌ PNG CONVERSION ERROR (${endTime - startTime}ms):`);
-    logger.error(`Error message: ${error.message}`);
-    logger.error(`Error stack: ${error.stack}`);
-    logger.error(`=== PNG CONVERSION REQUEST FAILED ===`);
-    
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
 app.get('/api/gpx/:routeId', async (req, res) => {
   try {
     const { routeId } = req.params;
@@ -307,7 +160,7 @@ app.get('/api/gpx/:routeId', async (req, res) => {
     
     res.set({
       'Content-Type': 'application/gpx+xml',
-      'Content-Disposition': `attachment; filename="route_${routeId}.gpx"`
+      'Content-Disposition': `attachment; filename="truck_route_${routeId}.gpx"`
     });
     
     res.send(gpxData);
@@ -323,21 +176,11 @@ app.get('/api/gpx/:routeId', async (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  console.log('🔥 Health check requested');
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// Simple test endpoint to check if routes are working
-app.get('/api/test-route/:id', (req, res) => {
-  console.log('🔥 Test route requested with ID:', req.params.id);
-  res.json({
-    message: 'Test route working',
-    id: req.params.id,
-    timestamp: new Date().toISOString()
+    uptime: process.uptime(),
+    service: 'Trucking Console - Route Parser'
   });
 });
 
@@ -354,7 +197,13 @@ app.use((error, req, res, next) => {
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    error: 'Endpoint not found'
+    error: 'Endpoint not found',
+    availableEndpoints: [
+      'POST /api/parse',
+      'GET /api/maps-url/:id',
+      'GET /api/gpx/:id',
+      'GET /health'
+    ]
   });
 });
 
@@ -370,10 +219,14 @@ async function startServer(port = 3000) {
 
     app.listen(port, () => {
       logger.info(`Server running on port ${port}`);
-      console.log(`\n🚛 Trucking Console Server`);
+      console.log(`\n🚛 Trucking Console Server - Route Parser & Google Maps Integration`);
       console.log(`📡 Server running on http://localhost:${port}`);
       console.log(`📋 API endpoints available at http://localhost:${port}/api`);
       console.log(`❤️  Health check: http://localhost:${port}/health`);
+      console.log(`\n✨ Core Features:`);
+      console.log(`   📄 Parse permit documents (PDF/images)`);
+      console.log(`   🗺️  Generate Google Maps URLs`);
+      console.log(`   📍 Export GPX files for navigation`);
       console.log(`\nPress Ctrl+C to stop the server\n`);
     });
 
