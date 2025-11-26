@@ -114,25 +114,6 @@
             background: #38a169;
         }
         
-        .state-selector {
-            margin: 1rem 0;
-        }
-        
-        .state-selector label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .state-selector select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-        
         .file-info {
             background: #f7fafc;
             padding: 1rem;
@@ -141,20 +122,24 @@
             border-left: 4px solid #667eea;
         }
         
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 1rem 0;
+        .loader {
+            display: none;
+            margin: 2rem auto;
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
         
-        .progress-fill {
-            height: 100%;
-            background: #667eea;
-            width: 0%;
-            transition: width 0.3s ease;
+        .loader.active {
+            display: block;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         .status {
@@ -230,24 +215,9 @@
                 <input type="file" id="fileInput" class="file-input" accept=".png,.jpg,.jpeg,.pdf" />
             </div>
             
-            <div class="state-selector">
-                <label for="stateSelect">Select State (Optional - Auto-detect if blank):</label>
-                <select id="stateSelect">
-                    <option value="">🤖 Auto-detect state using AI</option>
-                    <option value="IL">Illinois (IL)</option>
-                    <option value="WI">Wisconsin (WI)</option>
-                    <option value="MO">Missouri (MO)</option>
-                    <option value="ND">North Dakota (ND)</option>
-                    <option value="IN">Indiana (IN)</option>
-                    <option value="VA">Virginia (VA)</option>
-                </select>
-            </div>
-            
             <div id="fileInfo" class="file-info hidden"></div>
             
-            <div class="progress-bar hidden" id="progressBar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
+            <div class="loader" id="loader"></div>
             
             <button id="processBtn" class="btn" disabled>Process Permit</button>
         </div>
@@ -264,11 +234,9 @@
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
-        const stateSelect = document.getElementById('stateSelect');
         const fileInfo = document.getElementById('fileInfo');
         const processBtn = document.getElementById('processBtn');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
+        const loader = document.getElementById('loader');
         const status = document.getElementById('status');
         const resultSection = document.getElementById('resultSection');
         const resultInfo = document.getElementById('resultInfo');
@@ -285,7 +253,6 @@
         uploadArea.addEventListener('drop', handleDrop);
         
         fileInput.addEventListener('change', handleFileSelect);
-        stateSelect.addEventListener('change', updateProcessButton);
         processBtn.addEventListener('click', processFile);
         downloadGpxBtn.addEventListener('click', downloadGpx);
         openMapsBtn.addEventListener('click', openMaps);
@@ -345,33 +312,19 @@
         async function processFile() {
             if (!selectedFile) return;
 
-            showStatus('Processing permit...', 'processing');
-            showProgress(0);
+            showStatus('Processing permit with AI...', 'processing');
+            loader.classList.add('active');
             processBtn.disabled = true;
             resultSection.classList.add('hidden');
 
             const formData = new FormData();
             formData.append('permit', selectedFile);
-            if (stateSelect.value) {
-                formData.append('state', stateSelect.value);
-            }
 
             try {
-                // Simulate progress
-                const progressInterval = setInterval(() => {
-                    const current = parseInt(progressFill.style.width) || 0;
-                    if (current < 90) {
-                        showProgress(current + 10);
-                    }
-                }, 500);
-
                 const response = await fetch('/api/parse', {
                     method: 'POST',
                     body: formData
                 });
-
-                clearInterval(progressInterval);
-                showProgress(100);
 
                 if (!response.ok) {
                     const error = await response.json();
@@ -380,14 +333,14 @@
 
                 processResult = await response.json();
                 showResult(processResult);
-                showStatus('Route data extracted successfully! Open in Google Maps or download GPX file.', 'success');
+                showStatus('✅ Route data extracted successfully! Open in Google Maps or download GPX file.', 'success');
 
             } catch (error) {
                 showStatus(`Error: ${error.message}`, 'error');
                 console.error('Processing error:', error);
             } finally {
+                loader.classList.remove('active');
                 processBtn.disabled = false;
-                setTimeout(() => hideProgress(), 2000);
             }
         }
 
@@ -454,16 +407,6 @@
             status.textContent = message;
             status.className = `status ${type}`;
             status.classList.remove('hidden');
-        }
-
-        function showProgress(percent) {
-            progressBar.classList.remove('hidden');
-            progressFill.style.width = `${percent}%`;
-        }
-
-        function hideProgress() {
-            progressBar.classList.add('hidden');
-            progressFill.style.width = '0%';
         }
     </script>
 </body>
