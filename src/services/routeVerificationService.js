@@ -38,7 +38,7 @@ class RouteVerificationService {
    * Returns street addresses/location names
    * Uses cascading model fallback for best accuracy
    */
-  async extractWaypoints(filePath) {
+  async extractWaypoints(filePath, permitInfo = {}) {
     let bestResult = null;
     let maxWaypoints = 0;
 
@@ -51,7 +51,7 @@ class RouteVerificationService {
         
         for (const strategy of strategies) {
           try {
-            const result = await this.extractWaypointsWithModel(filePath, model, strategy);
+            const result = await this.extractWaypointsWithModel(filePath, model, strategy, permitInfo);
             
             if (result && result.length > 0) {
               logger.info(`   ✓ Strategy '${strategy}' extracted ${result.length} waypoints`);
@@ -84,7 +84,9 @@ class RouteVerificationService {
       return bestResult;
     }
 
-    throw new Error('All models and strategies failed to extract waypoints');
+    // Return empty array instead of throwing - let caller decide if this is acceptable
+    logger.warn('⚠️  No waypoints extracted by any model/strategy');
+    return [];
   }
 
   /**
@@ -804,18 +806,33 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
   /**
    * Complete workflow: Extract → Verify → Geocode → Generate JSON
    */
-  async processPermitRoute(filePath) {
+  async processPermitRoute(filePath, permitInfo = {}) {
     try {
       logger.info(`\n${'='.repeat(60)}`);
       logger.info(`🚛 ROUTE VERIFICATION WORKFLOW STARTED`);
       logger.info(`File: ${filePath}`);
+      if (permitInfo.pageNumber) {
+        logger.info(`Page: ${permitInfo.pageNumber}/${permitInfo.totalPages || '?'}`);
+      }
       logger.info(`${'='.repeat(60)}\n`);
 
       // STEP 1: Extract waypoints
-      const extractedWaypoints = await this.extractWaypoints(filePath);
+      const extractedWaypoints = await this.extractWaypoints(filePath, permitInfo);
       
       if (extractedWaypoints.length === 0) {
-        throw new Error('No waypoints could be extracted from the permit document');
+        logger.warn('⚠️  No waypoints extracted from this page');
+        return {
+          success: false,
+          extractedWaypoints: [],
+          geocodedWaypoints: [],
+          mapsJson: null,
+          metadata: {
+            totalWaypoints: 0,
+            geocodedSuccessfully: 0,
+            verificationConfidence: 0,
+            timestamp: new Date().toISOString()
+          }
+        };
       }
       
       logger.info(`\n📋 EXTRACTED WAYPOINTS (${extractedWaypoints.length}):`);

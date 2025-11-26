@@ -99,16 +99,50 @@ async function parsePermit(filePath, state = null) {
         const imagePaths = await convertPdfToImages(filePath);
         const imageDir = path.dirname(imagePaths[0]);
         
-        logger.info('🗺️  Running coordinate verification on first page...');
+        logger.info(`🔍 Scanning all ${imagePaths.length} pages for routing tables...`);
         const verificationService = new RouteVerificationService();
-        const verificationResult = await verificationService.processPermitRoute(imagePaths[0]);
+        
+        let verificationResult = null;
+        let successfulPage = null;
+        
+        // Try each page until we find routing information
+        for (let i = 0; i < imagePaths.length; i++) {
+          const pageNum = i + 1;
+          logger.info(`📄 Checking page ${pageNum}/${imagePaths.length} for routing data...`);
+          
+          try {
+            const pageResult = await verificationService.processPermitRoute(imagePaths[i], { 
+              state, 
+              pageNumber: pageNum,
+              totalPages: imagePaths.length 
+            });
+            
+            // If we successfully extracted waypoints, use this page
+            if (pageResult.success && pageResult.geocodedWaypoints && pageResult.geocodedWaypoints.length > 0) {
+              verificationResult = pageResult;
+              successfulPage = pageNum;
+              logger.info(`✅ Found routing table on page ${pageNum} with ${pageResult.geocodedWaypoints.length} waypoints!`);
+              break;
+            } else {
+              logger.info(`   ⏩ Page ${pageNum} has no routing data, continuing...`);
+            }
+          } catch (pageError) {
+            logger.warn(`   ⚠️  Page ${pageNum} processing failed: ${pageError.message}, continuing...`);
+            // Continue to next page
+          }
+        }
+        
+        // If no page had routing data, fail
+        if (!verificationResult) {
+          throw new Error(`No routing tables found in any of the ${imagePaths.length} pages`);
+        }
         
         // Store verification result for later use in mapsService
         if (!parsePermit.verificationCache) {
           parsePermit.verificationCache = new Map();
         }
         parsePermit.verificationCache.set(filePath, verificationResult);
-        logger.info(`✅ PDF coordinate verification completed with ${verificationResult.geocodedWaypoints.length} geocoded waypoints`);
+        logger.info(`✅ PDF coordinate verification completed with ${verificationResult.geocodedWaypoints.length} geocoded waypoints from page ${successfulPage}`);
         
         // Clean up temporary images
         await fs.remove(imageDir);
