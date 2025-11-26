@@ -407,10 +407,21 @@ Provide the most accurate coordinates possible based on your knowledge. If the e
         throw new Error(`Insufficient valid waypoints: ${validWaypoints.length} (need at least 2)`);
       }
 
+      // Sort by order field to ensure proper sequence
+      validWaypoints.sort((a, b) => (a.order || 0) - (b.order || 0));
+
       // Separate origin, destination, and intermediate waypoints
       const origin = validWaypoints.find(wp => wp.type === 'origin') || validWaypoints[0];
       const destination = validWaypoints.find(wp => wp.type === 'destination') || validWaypoints[validWaypoints.length - 1];
-      const waypoints = validWaypoints.filter(wp => wp !== origin && wp !== destination);
+      
+      // Get intermediate waypoints and remove duplicates
+      let intermediateWaypoints = validWaypoints.filter(wp => wp !== origin && wp !== destination);
+      
+      // Remove duplicate cities to prevent backtracking
+      intermediateWaypoints = this.removeDuplicateCities(intermediateWaypoints);
+      
+      // Ensure waypoints are geographically ordered (no backtracking)
+      intermediateWaypoints = this.ensureGeographicOrder(origin, intermediateWaypoints, destination);
 
       const mapsJson = {
         origin: {
@@ -425,7 +436,7 @@ Provide the most accurate coordinates possible based on your knowledge. If the e
           address: destination.address,
           formattedAddress: destination.formattedAddress || destination.address
         },
-        waypoints: waypoints.map(wp => ({
+        waypoints: intermediateWaypoints.map(wp => ({
           lat: wp.coordinates.lat,
           lng: wp.coordinates.lng,
           address: wp.address,
@@ -435,7 +446,7 @@ Provide the most accurate coordinates possible based on your knowledge. If the e
         timestamp: new Date().toISOString()
       };
 
-      logger.info(`✅ Generated Maps JSON with ${waypoints.length} waypoints`);
+      logger.info(`✅ Generated Maps JSON with ${intermediateWaypoints.length} waypoints`);
       logger.info(`   Origin: ${origin.address}`);
       logger.info(`   Destination: ${destination.address}`);
       
@@ -504,6 +515,123 @@ Provide the most accurate coordinates possible based on your knowledge. If the e
       logger.error(`${'='.repeat(60)}\n`);
       throw error;
     }
+  }
+
+  /**
+   * Remove duplicate cities from waypoints list
+   * Prevents routes like "Kansas City → Lawrence → Kansas City"
+   */
+  removeDuplicateCities(waypoints) {
+    const seen = new Set();
+    const unique = [];
+
+    for (const wp of waypoints) {
+      // Extract city name (before first comma)
+      const city = wp.address.split(',')[0].trim().toLowerCase();
+      
+      if (!seen.has(city)) {
+        seen.add(city);
+        unique.push(wp);
+      } else {
+        logger.info(`   🗑️  Removed duplicate waypoint: ${wp.address}`);
+      }
+    }
+
+    return unique;
+  }
+
+  /**
+   * Ensure waypoints are in geographic order (no backtracking)
+   * Uses distance calculation to detect and fix routing backwards
+   */
+  ensureGeographicOrder(origin, waypoints, destination) {
+    if (waypoints.length === 0) return waypoints;
+
+    logger.info(`   🔄 Checking geographic order of ${waypoints.length} waypoints...`);
+
+    // Calculate cumulative distance for current order
+    const currentDistance = this.calculateTotalDistance([origin, ...waypoints, destination]);
+    
+    // Try removing waypoints that cause backtracking
+    const optimized = [];
+    let lastPoint = origin;
+
+    for (const wp of waypoints) {
+      const distToWaypoint = this.calculateDistance(
+        lastPoint.coordinates.lat, 
+        lastPoint.coordinates.lng,
+        wp.coordinates.lat,
+        wp.coordinates.lng
+      );
+
+      const distFromWaypointToDest = this.calculateDistance(
+        wp.coordinates.lat,
+        wp.coordinates.lng,
+        destination.coordinates.lat,
+        destination.coordinates.lng
+      );
+
+      const directDistance = this.calculateDistance(
+        lastPoint.coordinates.lat,
+        lastPoint.coordinates.lng,
+        destination.coordinates.lat,
+        destination.coordinates.lng
+      );
+
+      // Keep waypoint if it's actually between last point and destination
+      // (not causing backtracking)
+      if (distToWaypoint + distFromWaypointToDest <= directDistance * 1.5) {
+        optimized.push(wp);
+        lastPoint = wp;
+      } else {
+        logger.info(`   ⚠️  Removed backtracking waypoint: ${wp.address}`);
+      }
+    }
+
+    const optimizedDistance = this.calculateTotalDistance([origin, ...optimized, destination]);
+    logger.info(`   ✅ Route optimization: ${currentDistance.toFixed(0)}mi → ${optimizedDistance.toFixed(0)}mi`);
+
+    return optimized;
+  }
+
+  /**
+   * Calculate total distance along a route
+   */
+  calculateTotalDistance(points) {
+    let total = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      total += this.calculateDistance(
+        points[i].coordinates.lat,
+        points[i].coordinates.lng,
+        points[i + 1].coordinates.lat,
+        points[i + 1].coordinates.lng
+      );
+    }
+    return total;
+  }
+
+  /**
+   * Calculate distance between two coordinates (Haversine formula)
+   * Returns distance in miles
+   */
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 3959; // Earth's radius in miles
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLon = this.toRadians(lon2 - lon1);
+    
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Convert degrees to radians
+   */
+  toRadians(degrees) {
+    return degrees * (Math.PI / 180);
   }
 }
 
