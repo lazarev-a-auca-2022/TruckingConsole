@@ -170,11 +170,11 @@ Look for fields like:
 Estimate pixel coordinates based on typical 8.5x11 inch form at 72 DPI (612x792px).`;
 
       logger.info(`Making API request to: ${this.baseUrl}`);
-      logger.info(`Request model: anthropic/claude-sonnet-4.5`);
+      logger.info(`Request model: ${this.model}`);
       logger.info(`Auth header: Bearer ${this.apiKey.substring(0, 15)}...`);
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5",  
+        model: this.model,  
         messages: [
           {
             role: "user",
@@ -279,7 +279,7 @@ Please return a JSON object with the extracted text mapped to field names:
 Focus on accuracy - only include text you're confident about. Leave fields empty if uncertain.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5", 
+        model: this.model, 
         messages: [
           {
             role: "user",

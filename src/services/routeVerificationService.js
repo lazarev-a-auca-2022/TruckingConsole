@@ -16,13 +16,13 @@ class RouteVerificationService {
     this.googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
     
-    // Recommended models (in order of accuracy for document extraction):
-    // 1. anthropic/claude-sonnet-4.5 (best for document understanding)
-    // 2. anthropic/claude-3.5-sonnet (excellent vision, good reasoning)
-    // 3. anthropic/claude-sonnet-4.5 (current default)
-    // 4. openai/gpt-4-vision-preview (good but more expensive)
-    this.model = process.env.VISION_MODEL || 'anthropic/claude-sonnet-4.5';
-    logger.info(`🤖 Using vision model: ${this.model}`);
+    // Parse models from environment variables
+    // VISION_MODEL: comma-separated list of models to try in order
+    // AI_MODEL: fallback if VISION_MODEL not set
+    const visionModels = process.env.VISION_MODEL || process.env.AI_MODEL || 'google/gemini-pro-1.5,anthropic/claude-3.5-sonnet,anthropic/claude-sonnet-4.5,openai/gpt-4-vision-preview';
+    this.models = visionModels.split(',').map(m => m.trim());
+    
+    logger.info(`🤖 Using vision models in order: ${this.models.join(' → ')}`);
   }
 
   /**
@@ -31,14 +31,7 @@ class RouteVerificationService {
    * Uses cascading model fallback for best accuracy
    */
   async extractWaypoints(filePath) {
-    const models = [
-      'anthropic/claude-sonnet-4.5',
-      'anthropic/claude-3.5-sonnet',
-      'anthropic/claude-sonnet-4.5',
-      'openai/gpt-4-vision-preview'
-    ];
-
-    for (const model of models) {
+    for (const model of this.models) {
       try {
         logger.info(`📍 STEP 1: Extracting waypoints with ${model}`);
         const result = await this.extractWaypointsWithModel(filePath, model);
@@ -134,7 +127,7 @@ Return ALL 7 entries:
 NOW: Extract ALL routing entries from this permit. Count carefully and include EVERYTHING.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: "anthropic/claude-sonnet-4.5",
+        model: model,
         messages: [
           {
             role: "user",
@@ -257,7 +250,7 @@ Return this JSON structure:
 Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compared to the permit. Add any missing entries.`;
 
       const response = await axios.post(this.baseUrl, {
-        model: model,
+        model: this.models[0],
         messages: [
           {
             role: "user",
@@ -453,7 +446,7 @@ IMPORTANT:
 - If you can't find exact location, use the nearest major city along the route`;
 
       const response = await axios.post(this.baseUrl, {
-        model: this.model,
+        model: this.models[0],
         messages: [
           {
             role: "user",
