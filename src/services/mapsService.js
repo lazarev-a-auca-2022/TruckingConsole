@@ -334,10 +334,5 @@ module.exports = {
   generateMapsUrl,
   generateMapsUrlById,
   geocodeAddress,
-<<<<<<< HEAD
   generateMapsUrlFromCoordinates
-=======
-  cacheRouteData,
-  getCachedRouteData
->>>>>>> 5cec4040c9f63220e0bb3644da770684c70f0008
 };

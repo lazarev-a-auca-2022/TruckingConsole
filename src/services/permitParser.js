@@ -4,11 +4,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const OpenRouterOCR = require('./openRouterOcr');
 const RouteVerificationService = require('./routeVerificationService');
-const { parseIllinois } = require('../parsers/illinoisParser');
-const { parseWisconsin } = require('../parsers/wisconsinParser');
-const { parseMissouri } = require('../parsers/missouriParser');
-const { parseNorthDakota } = require('../parsers/northDakotaParser');
-const { parseIndiana } = require('../parsers/indianaParser');
+const AIPermitParser = require('./aiPermitParser');
 
 // Supported states for AI parsing
 const SUPPORTED_STATES = ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX'];
