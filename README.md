@@ -1,4 +1,4 @@
-# TruckingConsole - AI-Powered Permit Parser
+# AI-Powered Permit Parser
 
 Multi-state truck permit parser with AI vision capabilities for extracting routes from PDFs and images.
 
@@ -31,7 +31,7 @@ docker-compose up -d
 docker-compose logs -f app
 ```
 
-Access: `http://your-server:3000`
+Access: `http://185.4.72.56:3000`
 
 ## Configuration
 
