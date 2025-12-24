@@ -79,7 +79,7 @@ async function sendMapsLinkEmail(toEmail, mapsUrl, routeInfo = {}) {
       ${routeId ? `
       <div class="route-info">
         <strong>Route Details:</strong><br>
-        ${routeId ? `<p>Route ID: ${routeId}</p>` : ''}
+        <p>Route ID: ${routeId}</p>
         ${state ? `<p>State: ${state}</p>` : ''}
         ${startPoint ? `<p>🚩 Start: ${startPoint}</p>` : ''}
         ${endPoint ? `<p>🏁 End: ${endPoint}</p>` : ''}
@@ -102,14 +102,17 @@ async function sendMapsLinkEmail(toEmail, mapsUrl, routeInfo = {}) {
 </html>
   `;
 
-  const emailText = `
-Trucking Console - Your Google Maps Route Link
+  // Build plain text email with consistent formatting
+  const routeDetails = [
+    routeId ? `Route ID: ${routeId}` : null,
+    state ? `State: ${state}` : null,
+    startPoint ? `Start: ${startPoint}` : null,
+    endPoint ? `End: ${endPoint}` : null
+  ].filter(Boolean).join('\n');
 
-${routeId ? `Route ID: ${routeId}` : ''}
-${state ? `State: ${state}` : ''}
-${startPoint ? `Start: ${startPoint}` : ''}
-${endPoint ? `End: ${endPoint}` : ''}
+  const emailText = `Trucking Console - Your Google Maps Route Link
 
+${routeDetails ? routeDetails + '\n' : ''}
 Google Maps Link:
 ${mapsUrl}
 
@@ -117,7 +120,7 @@ Click or copy the link above to open your route in Google Maps.
 
 ---
 This email was sent from Trucking Console - Permit Converter
-  `;
+`;
 
   const mailOptions = {
     from: fromEmail,
