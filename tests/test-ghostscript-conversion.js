@@ -56,13 +56,26 @@ async function testGhostscriptConversion() {
     console.error('\nFull error:', error);
     
     // Check if Ghostscript is available
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
+    const { spawn } = require('child_process');
     
     try {
-      const { stdout } = await execAsync('gs --version');
-      console.log('\nℹ️  Ghostscript version:', stdout.trim());
+      const gs = spawn('gs', ['--version']);
+      
+      gs.stdout.on('data', (data) => {
+        console.log('\nℹ️  Ghostscript version:', data.toString().trim());
+      });
+      
+      gs.on('error', (err) => {
+        console.error('\n⚠️  Ghostscript is not installed or not in PATH');
+        console.error('   This test requires Ghostscript to be installed.');
+        console.error('   In Docker, Ghostscript is installed via the Dockerfile.');
+      });
+      
+      gs.on('close', (code) => {
+        if (code !== 0) {
+          console.error('\n⚠️  Ghostscript check failed');
+        }
+      });
     } catch (gsError) {
       console.error('\n⚠️  Ghostscript is not installed or not in PATH');
       console.error('   This test requires Ghostscript to be installed.');
