@@ -47,7 +47,7 @@ async function convertPdfToImages(pdfPath) {
     
     // Execute Ghostscript with proper error handling
     try {
-      // Use exec with shell disabled for better security
+      // Use spawn with shell disabled for better security
       const { spawn } = require('child_process');
       await new Promise((resolve, reject) => {
         const gs = spawn('gs', gsArgs, { shell: false });
@@ -90,9 +90,11 @@ async function convertPdfToImages(pdfPath) {
     const pngFiles = files
       .filter(file => file.endsWith('.png'))
       .sort((a, b) => {
-        // Sort by page number
-        const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-        const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+        // Sort by page number - extract from pattern 'page-N.png'
+        const matchA = a.match(/page-(\d+)\.png/);
+        const matchB = b.match(/page-(\d+)\.png/);
+        const numA = matchA ? parseInt(matchA[1]) : 0;
+        const numB = matchB ? parseInt(matchB[1]) : 0;
         return numA - numB;
       })
       .map(file => path.join(outputDir, file));

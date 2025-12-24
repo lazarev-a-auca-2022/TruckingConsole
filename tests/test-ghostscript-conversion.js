@@ -59,7 +59,7 @@ async function testGhostscriptConversion() {
     const { spawn } = require('child_process');
     
     try {
-      const gs = spawn('gs', ['--version']);
+      const gs = spawn('gs', ['--version'], { shell: false });
       
       gs.stdout.on('data', (data) => {
         console.log('\nℹ️  Ghostscript version:', data.toString().trim());
