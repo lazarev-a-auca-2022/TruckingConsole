@@ -221,7 +221,7 @@
                 <label for="emailPromptInput" style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500;">📧 Enter your email address</label>
                 <input type="email" id="emailPromptInput" placeholder="Enter email address" 
                        style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
-                <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Required to receive the Google Maps route link</p>
+                <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">The Google Maps link will be automatically sent to this email after processing</p>
             </div>
             
             <div class="loader" id="loader"></div>
@@ -235,16 +235,6 @@
             <div id="resultInfo" class="result-info"></div>
             <button id="openMapsBtn" class="btn">🗺️ Open in Google Maps</button>
             <button id="downloadGpxBtn" class="btn btn-secondary">📍 Download GPX Route</button>
-            
-            <div class="email-section" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #eee;">
-                <h4 style="margin-bottom: 0.75rem; color: #333;">📧 Send Route to Email</h4>
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <input type="email" id="emailInput" placeholder="Enter email address" 
-                           style="flex: 1; min-width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
-                    <button id="sendEmailBtn" class="btn" style="background: #ed8936;">📨 Send Link</button>
-                </div>
-                <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Receive the Google Maps link directly in your inbox</p>
-            </div>
         </div>
     </div>
 
@@ -259,8 +249,6 @@
         const resultInfo = document.getElementById('resultInfo');
         const downloadGpxBtn = document.getElementById('downloadGpxBtn');
         const openMapsBtn = document.getElementById('openMapsBtn');
-        const emailInput = document.getElementById('emailInput');
-        const sendEmailBtn = document.getElementById('sendEmailBtn');
         const emailPromptInput = document.getElementById('emailPromptInput');
         
         let selectedFile = null;
@@ -282,7 +270,6 @@
         processBtn.addEventListener('click', processFile);
         downloadGpxBtn.addEventListener('click', downloadGpx);
         openMapsBtn.addEventListener('click', openMaps);
-        sendEmailBtn.addEventListener('click', sendEmail);
         emailPromptInput.addEventListener('input', updateProcessButton);
 
         function handleDragOver(e) {
@@ -354,6 +341,7 @@
 
             const formData = new FormData();
             formData.append('permit', selectedFile);
+            formData.append('email', email);
 
             try {
                 const response = await fetch('/api/parse', {
@@ -369,9 +357,14 @@
                 processResult = await response.json();
                 showResult(processResult);
                 
-                // Pre-fill the email input in results section with the email used
-                emailInput.value = email;
-                showStatus('✅ Route data extracted successfully! Open in Google Maps or download GPX file.', 'success');
+                // Show success message with email status
+                if (processResult.emailSent) {
+                    showStatus(`✅ Route data extracted successfully! Google Maps link sent to ${email}.`, 'success');
+                } else if (processResult.emailError) {
+                    showStatus(`✅ Route extracted successfully! Note: Email failed to send - ${processResult.emailError}`, 'success');
+                } else {
+                    showStatus('✅ Route data extracted successfully! Open in Google Maps or download GPX file.', 'success');
+                }
 
             } catch (error) {
                 showStatus(`Error: ${error.message}`, 'error');
@@ -438,53 +431,6 @@
                 
             } catch (error) {
                 showStatus(`Maps opening failed: ${error.message}`, 'error');
-            }
-        }
-
-        async function sendEmail() {
-            if (!processResult) return;
-            
-            const email = emailInput.value.trim();
-            if (!email) {
-                showStatus('Please enter an email address.', 'error');
-                return;
-            }
-
-            // Basic email validation
-            if (!isValidEmail(email)) {
-                showStatus('Please enter a valid email address.', 'error');
-                return;
-            }
-
-            sendEmailBtn.disabled = true;
-            sendEmailBtn.textContent = '📨 Sending...';
-
-            try {
-                const response = await fetch('/api/send-maps-email', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        email: email,
-                        routeId: processResult.data.routeId
-                    })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to send email');
-                }
-
-                showStatus(`✅ Google Maps link sent successfully to ${email}!`, 'success');
-                emailInput.value = '';
-
-            } catch (error) {
-                showStatus(`Email sending failed: ${error.message}`, 'error');
-            } finally {
-                sendEmailBtn.disabled = false;
-                sendEmailBtn.textContent = '📨 Send Link';
             }
         }
 

@@ -99,7 +99,7 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { state } = req.body;
+    const { state, email } = req.body;
     
     logger.info(`Parsing uploaded file: ${req.file.filename} for state: ${state || 'auto-detect'}`);
     tempFilePath = req.file.path;
@@ -112,10 +112,33 @@ app.post('/api/parse', upload.single('permit'), async (req, res) => {
     // Clean up uploaded file after processing
     await fs.remove(tempFilePath).catch(() => {});
     
+    // Automatically send email if provided
+    let emailSent = false;
+    let emailError = null;
+    if (email && email.trim()) {
+      try {
+        const mapsUrl = await generateMapsUrlById(result.routeId);
+        const routeInfo = {
+          routeId: result.routeId,
+          state: result.state,
+          startPoint: result.parseResult?.startPoint?.address,
+          endPoint: result.parseResult?.endPoint?.address
+        };
+        await sendMapsLinkEmail(email.trim(), mapsUrl, routeInfo);
+        emailSent = true;
+        logger.info(`Maps link automatically sent to ${email} for route ${result.routeId}`);
+      } catch (emailErr) {
+        logger.warn(`Failed to auto-send email to ${email}: ${emailErr.message}`);
+        emailError = emailErr.message;
+      }
+    }
+    
     res.json({
       success: true,
       data: result,
       message: 'Permit parsed successfully. Route data extracted and ready for Google Maps integration.',
+      emailSent,
+      emailError,
       timestamp: new Date().toISOString()
     });
 
