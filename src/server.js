@@ -3,8 +3,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const { parsePermit } = require('./services/permitParser');
-const { generateMapsUrlById, cacheRouteData } = require('./services/mapsService');
+const { generateMapsUrlById, cacheRouteData, getCachedRouteData } = require('./services/mapsService');
 const { generateGpxById } = require('./services/gpxService');
+const { sendMapsLinkEmail } = require('./services/emailService');
 const { connectDatabase } = require('./config/database');
 const logger = require('./utils/logger');
 
@@ -76,14 +77,16 @@ app.get('/api', (req, res) => {
     endpoints: [
       'POST /api/parse - Upload and parse permit file (PDF or image) - Auto-detects state using AI',
       'GET /api/maps-url/:id - Get Google Maps URL for the route',
-      'GET /api/gpx/:id - Download GPX file for Garmin navigation'
+      'GET /api/gpx/:id - Download GPX file for Garmin navigation',
+      'POST /api/send-maps-email - Send Google Maps link via email'
     ],
     workflow: [
       '1. Upload permit document (PDF or image)',
       '2. AI automatically detects the issuing state',
       '3. Extract route data (start/end points, waypoints, restrictions)',
       '4. Generate Google Maps URL with all route points',
-      '5. Export GPX file for Garmin/navigation devices'
+      '5. Export GPX file for Garmin/navigation devices',
+      '6. Send Google Maps link to email (optional)'
     ],
   supportedStates: ['IL', 'WI', 'MO', 'ND', 'IN', 'VA', 'TX']
   });
@@ -167,6 +170,57 @@ app.get('/api/gpx/:routeId', async (req, res) => {
 
   } catch (error) {
     logger.error(`GPX API error: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Send Google Maps link via email
+app.post('/api/send-maps-email', async (req, res) => {
+  try {
+    const { email, routeId } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email address is required'
+      });
+    }
+
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Route ID is required'
+      });
+    }
+
+    // Generate the Maps URL
+    const mapsUrl = await generateMapsUrlById(routeId);
+
+    // Get cached route data for additional info in email
+    const cachedData = getCachedRouteData(routeId);
+    const routeInfo = {
+      routeId,
+      state: cachedData?.state,
+      startPoint: cachedData?.parseResult?.startPoint?.address,
+      endPoint: cachedData?.parseResult?.endPoint?.address
+    };
+
+    // Send the email
+    const result = await sendMapsLinkEmail(email, mapsUrl, routeInfo);
+
+    logger.info(`Maps link sent to ${email} for route ${routeId}`);
+
+    res.json({
+      success: true,
+      message: `Google Maps link sent successfully to ${email}`,
+      messageId: result.messageId
+    });
+
+  } catch (error) {
+    logger.error(`Send Maps Email API error: ${error.message}`);
     res.status(500).json({
       success: false,
       error: error.message

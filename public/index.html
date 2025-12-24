@@ -228,6 +228,16 @@
             <div id="resultInfo" class="result-info"></div>
             <button id="openMapsBtn" class="btn">🗺️ Open in Google Maps</button>
             <button id="downloadGpxBtn" class="btn btn-secondary">📍 Download GPX Route</button>
+            
+            <div class="email-section" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #eee;">
+                <h4 style="margin-bottom: 0.75rem; color: #333;">📧 Send Route to Email</h4>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <input type="email" id="emailInput" placeholder="Enter email address" 
+                           style="flex: 1; min-width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
+                    <button id="sendEmailBtn" class="btn" style="background: #ed8936;">📨 Send Link</button>
+                </div>
+                <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Receive the Google Maps link directly in your inbox</p>
+            </div>
         </div>
     </div>
 
@@ -242,6 +252,8 @@
         const resultInfo = document.getElementById('resultInfo');
         const downloadGpxBtn = document.getElementById('downloadGpxBtn');
         const openMapsBtn = document.getElementById('openMapsBtn');
+        const emailInput = document.getElementById('emailInput');
+        const sendEmailBtn = document.getElementById('sendEmailBtn');
         
         let selectedFile = null;
         let processResult = null;
@@ -256,6 +268,7 @@
         processBtn.addEventListener('click', processFile);
         downloadGpxBtn.addEventListener('click', downloadGpx);
         openMapsBtn.addEventListener('click', openMaps);
+        sendEmailBtn.addEventListener('click', sendEmail);
 
         function handleDragOver(e) {
             e.preventDefault();
@@ -400,6 +413,54 @@
                 
             } catch (error) {
                 showStatus(`Maps opening failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendEmail() {
+            if (!processResult) return;
+            
+            const email = emailInput.value.trim();
+            if (!email) {
+                showStatus('Please enter an email address.', 'error');
+                return;
+            }
+
+            // Basic email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showStatus('Please enter a valid email address.', 'error');
+                return;
+            }
+
+            sendEmailBtn.disabled = true;
+            sendEmailBtn.textContent = '📨 Sending...';
+
+            try {
+                const response = await fetch('/api/send-maps-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        routeId: processResult.data.routeId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to send email');
+                }
+
+                showStatus(`✅ Google Maps link sent successfully to ${email}!`, 'success');
+                emailInput.value = '';
+
+            } catch (error) {
+                showStatus(`Email sending failed: ${error.message}`, 'error');
+            } finally {
+                sendEmailBtn.disabled = false;
+                sendEmailBtn.textContent = '📨 Send Link';
             }
         }
 
