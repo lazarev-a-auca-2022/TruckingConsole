@@ -217,6 +217,13 @@
             
             <div id="fileInfo" class="file-info hidden"></div>
             
+            <div class="email-prompt" style="margin: 1rem 0;">
+                <label for="emailPromptInput" style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500;">📧 Enter your email address</label>
+                <input type="email" id="emailPromptInput" placeholder="Enter email address" 
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
+                <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Required to receive the Google Maps route link</p>
+            </div>
+            
             <div class="loader" id="loader"></div>
             
             <button id="processBtn" class="btn" disabled>Process Permit</button>
@@ -254,9 +261,16 @@
         const openMapsBtn = document.getElementById('openMapsBtn');
         const emailInput = document.getElementById('emailInput');
         const sendEmailBtn = document.getElementById('sendEmailBtn');
+        const emailPromptInput = document.getElementById('emailPromptInput');
         
         let selectedFile = null;
         let processResult = null;
+
+        // Email validation helper function
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
 
         // Upload area events
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -269,6 +283,7 @@
         downloadGpxBtn.addEventListener('click', downloadGpx);
         openMapsBtn.addEventListener('click', openMaps);
         sendEmailBtn.addEventListener('click', sendEmail);
+        emailPromptInput.addEventListener('input', updateProcessButton);
 
         function handleDragOver(e) {
             e.preventDefault();
@@ -319,11 +334,18 @@
         }
 
         function updateProcessButton() {
-            processBtn.disabled = !selectedFile;
+            const email = emailPromptInput.value.trim();
+            processBtn.disabled = !selectedFile || !isValidEmail(email);
         }
 
         async function processFile() {
             if (!selectedFile) return;
+
+            const email = emailPromptInput.value.trim();
+            if (!isValidEmail(email)) {
+                showStatus('Please enter a valid email address.', 'error');
+                return;
+            }
 
             showStatus('Processing permit with AI...', 'processing');
             loader.classList.add('active');
@@ -346,6 +368,9 @@
 
                 processResult = await response.json();
                 showResult(processResult);
+                
+                // Pre-fill the email input in results section with the email used
+                emailInput.value = email;
                 showStatus('✅ Route data extracted successfully! Open in Google Maps or download GPX file.', 'success');
 
             } catch (error) {
@@ -426,8 +451,7 @@
             }
 
             // Basic email validation
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
+            if (!isValidEmail(email)) {
                 showStatus('Please enter a valid email address.', 'error');
                 return;
             }
