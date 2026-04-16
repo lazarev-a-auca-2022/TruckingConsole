@@ -51,22 +51,33 @@ async function convertPdfToImages(pdfPath) {
       const { spawn } = require('child_process');
       await new Promise((resolve, reject) => {
         const gs = spawn('gs', gsArgs, { shell: false });
-        
+
         let stderr = '';
-        
+
+        // Consume stdout to prevent buffer blocking
+        gs.stdout.on('data', () => {});
+
         gs.stderr.on('data', (data) => {
           stderr += data.toString();
         });
-        
+
+        // Kill Ghostscript if it hangs for more than 90 seconds
+        const timeout = setTimeout(() => {
+          gs.kill('SIGKILL');
+          reject(new Error('Ghostscript timed out after 90 seconds'));
+        }, 90000);
+
         gs.on('close', (code) => {
+          clearTimeout(timeout);
           if (code !== 0) {
             reject(new Error(`Ghostscript exited with code ${code}: ${stderr}`));
           } else {
             resolve();
           }
         });
-        
+
         gs.on('error', (err) => {
+          clearTimeout(timeout);
           if (err.code === 'ENOENT') {
             reject(new Error('Ghostscript is not installed or not in PATH. Please ensure Ghostscript (gs) is installed.'));
           } else {
