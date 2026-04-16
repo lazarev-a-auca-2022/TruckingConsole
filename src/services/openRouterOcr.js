@@ -11,7 +11,7 @@ class OpenRouterOCR {
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY;
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    this.model = process.env.AI_MODEL || 'anthropic/claude-sonnet-4.5';
+    this.model = process.env.AI_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
     this.templateAnalysis = new Map(); // Cache template analysis
     logger.info(`OpenRouter OCR initialized with model: ${this.model}`);
   }

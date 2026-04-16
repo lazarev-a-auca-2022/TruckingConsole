@@ -51,7 +51,7 @@ async function testAIParser() {
   }
   
   console.log(`✅ API Key found: ${process.env.OPENROUTER_API_KEY.substring(0, 15)}...`);
-  console.log(`📝 Model: ${process.env.AI_MODEL || 'anthropic/claude-3.5-sonnet'}`);
+  console.log(`📝 Model: ${process.env.AI_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free'}`);
   console.log('\n' + '='.repeat(60) + '\n');
   
   try {
