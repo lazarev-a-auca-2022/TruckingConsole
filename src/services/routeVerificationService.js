@@ -381,66 +381,39 @@ Return this JSON structure:
 
 Your job is to ensure the verifiedWaypoints list is COMPLETE and ACCURATE compared to the permit. Add any missing entries.`;
 
-      const model = this.models[0];
-      const isAnthropicModel = model.includes('anthropic') || model.includes('claude');
-      
-      const messageContent = isAnthropicModel ? [
-        {
-          type: "text",
-          text: prompt,
-          cache_control: { type: "ephemeral" } // Cache verification instructions
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:${mediaType};base64,${base64Data}`
-          }
-        }
-      ] : [
-        {
-          type: "text",
-          text: prompt
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:${mediaType};base64,${base64Data}`
-          }
-        }
-      ];
+      let content;
+      let lastError;
+      for (const model of this.models) {
+        try {
+          const messageContent = [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Data}` } }
+          ];
 
-      const requestHeaders = {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://trucking-console.app',
-        'X-Title': 'Trucking Console Route Verification'
-      };
+          const response = await axios.post(this.baseUrl, {
+            model: model,
+            messages: [{ role: "user", content: messageContent }],
+            max_tokens: 6000,
+            temperature: 0.05
+          }, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://trucking-console.app',
+              'X-Title': 'Trucking Console Route Verification'
+            },
+            timeout: 45000
+          });
 
-      if (isAnthropicModel) {
-        requestHeaders['anthropic-version'] = '2023-06-01';
-        requestHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
+          content = response.data.choices[0].message.content;
+          break;
+        } catch (err) {
+          logger.warn(`   ⚠️  Verification model ${model} failed: ${err.message}, trying next...`);
+          lastError = err;
+        }
       }
 
-      const response = await axios.post(this.baseUrl, {
-        model: model,
-        messages: [
-          {
-            role: "user",
-            content: messageContent
-          }
-        ],
-        max_tokens: 6000,
-        temperature: 0.05
-      }, {
-        headers: requestHeaders,
-        timeout: 45000
-      });
-      
-      if (response.data.usage?.cache_read_input_tokens) {
-        logger.info(`   ⚡ Verification cache hit: ${response.data.usage.cache_read_input_tokens} tokens saved`);
-      }
-
-      const content = response.data.choices[0].message.content;
+      if (!content) throw lastError;
       logger.info(`Raw verification response: ${content.substring(0, 200)}...`);
       
       // Parse JSON response
@@ -661,46 +634,33 @@ CRITICAL INSTRUCTIONS FOR ACCURACY:
 - NEVER return vague locations like "United States" or "USA" alone
 - Cross-reference with surrounding route context if provided`;
 
-      const model = this.models[0];
-      const isAnthropicModel = model.includes('anthropic') || model.includes('claude');
-      
-      // For geocoding, cache the instruction part of the prompt
-      const messageContent = isAnthropicModel ? [
-        {
-          type: "text",
-          text: prompt,
-          cache_control: { type: "ephemeral" }
+      let content;
+      let lastError;
+      for (const model of this.models) {
+        try {
+          const response = await axios.post(this.baseUrl, {
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 400,
+            temperature: 0.05
+          }, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://trucking-console.app',
+              'X-Title': 'Trucking Console Geocoding'
+            },
+            timeout: 15000
+          });
+          content = response.data.choices[0].message.content;
+          break;
+        } catch (err) {
+          logger.warn(`   ⚠️  Geocoding model ${model} failed: ${err.message}, trying next...`);
+          lastError = err;
         }
-      ] : prompt;
-
-      const requestHeaders = {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://trucking-console.app',
-        'X-Title': 'Trucking Console Geocoding'
-      };
-
-      if (isAnthropicModel) {
-        requestHeaders['anthropic-version'] = '2023-06-01';
-        requestHeaders['anthropic-beta'] = 'prompt-caching-2024-07-31';
       }
 
-      const response = await axios.post(this.baseUrl, {
-        model: model,
-        messages: [
-          {
-            role: "user",
-            content: isAnthropicModel ? messageContent : prompt
-          }
-        ],
-        max_tokens: 400,
-        temperature: 0.05
-      }, {
-        headers: requestHeaders,
-        timeout: 15000
-      });
-
-      const content = response.data.choices[0].message.content;
+      if (!content) throw lastError;
       
       // Parse JSON response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -1034,25 +994,32 @@ Rules:
 - If these are the same location or very close, return empty array
 - Focus on cities that would be logical truck route waypoints`;
 
-      const response = await axios.post(this.baseUrl, {
-        model: this.models[0],
-        messages: [{
-          role: "user",
-          content: prompt
-        }],
-        max_tokens: 300,
-        temperature: 0.1
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://trucking-console.app',
-          'X-Title': 'Trucking Console Waypoint Enrichment'
-        },
-        timeout: 10000
-      });
+      let content;
+      let lastError;
+      for (const model of this.models) {
+        try {
+          const response = await axios.post(this.baseUrl, {
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 300,
+            temperature: 0.1
+          }, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://trucking-console.app',
+              'X-Title': 'Trucking Console Waypoint Enrichment'
+            },
+            timeout: 10000
+          });
+          content = response.data.choices[0].message.content;
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
 
-      const content = response.data.choices[0].message.content;
+      if (!content) throw lastError;
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       
       if (jsonMatch) {
